@@ -5,6 +5,7 @@
 
 
 function MyTimelineAssistant(argFromPusher) {
+	
 	/* this is the creator function for your scene assistant object. It will be passed all the 
 	   additional parameters (after the scene name) that were passed to pushScene. The reference
 	   to the scene controller (this.controller) has not be established yet, so any initialization
@@ -38,7 +39,7 @@ function MyTimelineAssistant(argFromPusher) {
 	 */
 	this.resetTwitState = function() {
 		jQuery('.timeline').empty();
-		thisA.twit.setLastId(SPAZCORE_SECTION_FRIENDS, 0);
+		thisA.twit.setLastId(SPAZCORE_SECTION_HOME, 0);
 		thisA.twit.setLastId(SPAZCORE_SECTION_REPLIES, 0);
 		thisA.twit.setLastId(SPAZCORE_SECTION_DMS,     0);
 
@@ -138,7 +139,7 @@ MyTimelineAssistant.prototype.setup = function() {
 
 
 
-MyTimelineAssistant.prototype.activate = function(event) {
+MyTimelineAssistant.prototype.activate = function(params) {
 	
 	sch.debug('ACTIVATE');
 	
@@ -158,7 +159,7 @@ MyTimelineAssistant.prototype.activate = function(event) {
 	/*
 		start the mytimeline 
 	*/
-	if (this.refreshOnActivate) {
+	if (this.refreshOnActivate || (params && params.refresh === true)) {
 		this.mytl.start();
 		this.refreshOnActivate = false;
 	}
@@ -185,6 +186,7 @@ MyTimelineAssistant.prototype.deactivate = function(event) {
 	/*
 		save timeline cache
 	*/
+	sch.debug('saving timeline cache…');
 	this.saveTimelineCache();
 	
 };
@@ -217,14 +219,13 @@ MyTimelineAssistant.prototype.cleanup = function(event) {
 MyTimelineAssistant.prototype.initTimeline = function() {
 	
 	sch.debug('initializing Timeline in assistant');
-	
+  // TODO: Timeline list widget
+	this.timelineModel = {items: []};
+  // this.controller.setupWidget("list-id", {}, this.timelineModel);
 	
 	var thisA = this;
-	
-
-
 	/*
-		set up the public timeline
+		set up the combined "my" timeline
 	*/
 	this.mytl   = new SpazTimeline({
 		'timeline_container_selector' :'#my-timeline',
@@ -235,17 +236,22 @@ MyTimelineAssistant.prototype.initTimeline = function() {
 		'event_target' :document,
 		
 		'refresh_time':sc.app.prefs.get('network-refreshinterval'),
-		'max_items':100,
+		'max_items':100, // this isn't actually used atm
 
 		'request_data': function() {
-			sc.helpers.markAllAsRead('#my-timeline div.timeline-entry');
+			if (thisA.isTopmostScene()) {
+				// sc.helpers.markAllAsRead('#my-timeline div.timeline-entry.new');
+				jQuery('#my-timeline div.timeline-entry.new').removeClass('new');
+			}
 			thisA.getData();
 		},
 		'data_success': function(e, data) {
-			var data = data.reverse();
+			data = data.reverse();
 			var no_dupes = [];
 			
 			var previous_count = jQuery('#my-timeline div.timeline-entry').length;
+			
+			var $oldFirst = jQuery('#my-timeline div.timeline-entry:first');
 			
 			for (var i=0; i < data.length; i++) {
 				
@@ -262,31 +268,96 @@ MyTimelineAssistant.prototype.initTimeline = function() {
 			};
 			
 			thisA.mytl.addItems(no_dupes);
+
+      // TODO: Timeline list widget
+      sc.app.Tweets.bucket.all(function(tweets) {
+        thisA.timelineModel.items = tweets;
+        sc.info("Finished loading tweets. There are now " + tweets.length);
+      //   thisA.controller.modelChanged(thisA.timelineModel);
+      });
+			
+			/*
+				sort timeline
+			*/
+			var before = new Date();
+			
+			// don't sort if we don't have anything new!
+			if (no_dupes.length > 0) {
+				// get first of new times
+				var new_first_time = no_dupes[0].SC_created_at_unixtime;
+				// get last of new times
+				var new_last_time  = no_dupes[no_dupes.length-1].SC_created_at_unixtime;
+				// get first of OLD times
+				var old_first_time = parseInt($oldFirst.attr('data-timestamp'), 10);
+				
+				sch.debug('new_first_time:'+new_first_time);
+				sch.debug('new_last_time:'+new_last_time);
+				sch.debug('old_first_time:'+old_first_time);
+				
+				// sort if either first new or last new is OLDER than the first old
+				if (new_first_time < old_first_time || new_last_time < old_first_time) {
+					jQuery('#my-timeline div.timeline-entry').tsort({attr:'data-timestamp', place:'orig', order:'desc'});					
+				} else {
+					sch.debug('Didn\'t resort…');
+				}
+
+			}
+			var after = new Date();
+			var total = new Date();
+			total.setTime(after.getTime() - before.getTime());
+			sch.debug('Sorting took ' + total.getMilliseconds() + 'ms');
 			
 			sc.helpers.updateRelativeTimes('#my-timeline div.timeline-entry span.date', 'data-created_at');
+			
 			/*
 				re-apply filtering
 			*/
 			thisA.filterTimeline();
 			
-			var new_count = jQuery('#my-timeline div.timeline-entry.new:visible').length;
+			/*
+				Get new counts
+			*/
+			var new_count         = jQuery('#my-timeline div.timeline-entry.new:visible').length;
+			var new_mention_count = jQuery('#my-timeline div.timeline-entry.new.reply:visible').length;
+			var new_dm_count      = jQuery('#my-timeline div.timeline-entry.new.dm:visible').length;
 			
+			/*
+				Scroll to the first new if there are new messages
+				and there were already some items in the timeline
+			*/
 			if (new_count > 0) {
+
 				// thisA.playAudioCue('newmsg');
 				
 				if (previous_count > 0) {
 					if (sc.app.prefs.get('timeline-scrollonupdate')) {
-						sch.dump("Scrolling to New because previous_count > 0 (it wasn't empty before we added new stuff)");
-						thisA.scrollToNew();
+						if (thisA.isTopmostScene()) {
+							sch.dump("Scrolling to New because previous_count > 0 (it wasn't empty before we added new stuff)");
+							thisA.scrollToNew();
+						}
 					}
 				}
 			}
 			
-			if (new_count > 0 && !thisA.isFullScreen) {
-				thisA.newMsgBanner(new_count);
-			} else if (thisA.isFullScreen) {
-				dump("I am not showing a banner! in "+thisA.controller.sceneElement.id);
+			/*
+				if we're not fullscreen, show a dashboard notification of new count(s)
+			*/
+			if (!thisA.isFullScreen) {
+				
+				if (new_count > 0 && sc.app.prefs.get('notify-newmessages')) {
+					thisA.newMsgBanner(new_count, 'newMessages');
+				}
+				if (new_mention_count > 0 && sc.app.prefs.get('notify-mentions')) {
+					thisA.newMsgBanner(new_mention_count, 'newMentions');
+				}
+				if (new_dm_count > 0 && sc.app.prefs.get('notify-dms')) {
+					thisA.newMsgBanner(new_dm_count, 'newDirectMessages');
+				}
+				
+			} else {
+				sch.dump("I am not showing a banner! in "+thisA.controller.sceneElement.id);
 			}
+			
 			thisA.hideInlineSpinner('activity-spinner-my-timeline');
 			
 			thisA.saveTimelineCache();
@@ -299,10 +370,16 @@ MyTimelineAssistant.prototype.initTimeline = function() {
 			thisA.displayErrorInfo(err_msg, error_array);
 		},
 		'renderer': function(obj) {
-			if (obj.SC_is_dm) {
-				return sc.app.tpl.parseTemplate('dm', obj);
-			} else {
-				return sc.app.tpl.parseTemplate('tweet', obj);
+			try {
+				if (obj.SC_is_dm) {
+					return sc.app.tpl.parseTemplate('dm', obj);
+				} else {
+					return sc.app.tpl.parseTemplate('tweet', obj);
+				}				
+			} catch(err) {
+				sch.error("There was an error rendering the object: "+sch.enJSON(obj));
+				sch.error("Error:"+sch.enJSON(err));
+				return '';
 			}
 			
 			
@@ -313,6 +390,7 @@ MyTimelineAssistant.prototype.initTimeline = function() {
 		override the standard removeExtraItems
 	*/
 	this.mytl.removeExtraItems = this.removeExtraItems;
+	
 };
 
 
@@ -342,14 +420,15 @@ MyTimelineAssistant.prototype.loadTimelineCache = function() {
 		var data = TempCache.load('mytimelinecache');
 
 		if (data !== null) {
-			thisA.twit.setLastId(SPAZCORE_SECTION_FRIENDS, data[SPAZCORE_SECTION_FRIENDS + '_lastid']);
+			thisA.twit.setLastId(SPAZCORE_SECTION_HOME, data[SPAZCORE_SECTION_HOME + '_lastid']);
 			thisA.twit.setLastId(SPAZCORE_SECTION_REPLIES, data[SPAZCORE_SECTION_REPLIES + '_lastid']);
 			thisA.twit.setLastId(SPAZCORE_SECTION_DMS,     data[SPAZCORE_SECTION_DMS     + '_lastid']);
 
 			document.getElementById('my-timeline').innerHTML = data.tweets_html;
-			sch.markAllAsRead('#my-timeline div.timeline-entry');		
+			sch.markAllAsRead('#my-timeline div.timeline-entry');
 		}
 		sch.unlisten(document, 'temp_cache_load_db_success', this._loadTimelineCache);
+		
 	};
 
 	
@@ -376,11 +455,16 @@ MyTimelineAssistant.prototype.saveTimelineCache = function() {
 	var twitdata = {};
 	twitdata['version']                            = this.cacheVersion || -1;
 	twitdata['tweets_html']                        = tweetsModel_html;
-	twitdata[SPAZCORE_SECTION_FRIENDS + '_lastid'] = this.twit.getLastId(SPAZCORE_SECTION_FRIENDS);
+	twitdata[SPAZCORE_SECTION_HOME + '_lastid'] = this.twit.getLastId(SPAZCORE_SECTION_HOME);
 	twitdata[SPAZCORE_SECTION_REPLIES + '_lastid'] = this.twit.getLastId(SPAZCORE_SECTION_REPLIES);
 	twitdata[SPAZCORE_SECTION_DMS     + '_lastid'] = this.twit.getLastId(SPAZCORE_SECTION_DMS);
 	
-	sch.dump(twitdata);
+	sch.debug(twitdata);
+	sch.debug('LASTIDS!');
+	sch.debug(twitdata[SPAZCORE_SECTION_HOME + '_lastid']);
+	sch.debug(twitdata[SPAZCORE_SECTION_REPLIES + '_lastid']);
+	sch.debug(twitdata[SPAZCORE_SECTION_DMS     + '_lastid']);
+	
 		
 	TempCache.save('mytimelinecache', twitdata);
 	
@@ -395,7 +479,9 @@ MyTimelineAssistant.prototype.getData = function() {
 	
 	var thisA = this;
 	
-	sch.markAllAsRead('#my-timeline div.timeline-entry');
+	if (thisA.isTopmostScene()) {
+		sc.helpers.markAllAsRead('#my-timeline div.timeline-entry');
+	}
 	
 	function getCombinedTimeline(statusobj) {
 		
@@ -476,17 +562,11 @@ MyTimelineAssistant.prototype.stopRefresher = function() {
 
 
 /**
- * Gets tweet from this.tweetsModel, or false if DNE 
+ * fires 'get_one_status_succeeded' on retrieval
  */
-MyTimelineAssistant.prototype.getTweetFromModel = function(id) {
+MyTimelineAssistant.prototype.getTweetFromModel = function(id, isdm) {
 	
-	// for(var i=0; i < this.tweetsModel.length; i++) {
-	// 	if (this.tweetsModel[i].id == id) {
-	// 		return this.tweetsModel[i];
-	// 	}
-	// }
-	// 
-	// return false;
+
 };
 
 
@@ -501,12 +581,28 @@ MyTimelineAssistant.prototype.addTweetToModel = function(twobj) {
 
 
 MyTimelineAssistant.prototype.removeExtraItems = function() {
+
+	sch.debug('Removing Extra Items ==================================================');
+
+	sch.debug("normal tweets: " + jQuery('#my-timeline div.timeline-entry:not(.reply):not(.dm)').length);
+	sch.debug("reply tweets: "  + jQuery('#my-timeline div.timeline-entry.reply').length);
+	sch.debug("dm tweets: "     + jQuery('#my-timeline div.timeline-entry.dm').length);
+
 	/*
 		from html timeline
 	*/
+	sch.debug('timeline-maxentries:'+sc.app.prefs.get('timeline-maxentries'));
 	sch.removeExtraElements('#my-timeline div.timeline-entry:not(.reply):not(.dm)', sc.app.prefs.get('timeline-maxentries'));
 	sch.removeExtraElements('#my-timeline div.timeline-entry.reply', sc.app.prefs.get('timeline-maxentries-reply'));
 	sch.removeExtraElements('#my-timeline div.timeline-entry.dm', sc.app.prefs.get('timeline-maxentries-dm'));
+
+	jQuery('#my-timeline>div:empty').remove(); // remove empty containers
+
+	sch.debug("normal tweets: " + jQuery('#my-timeline div.timeline-entry:not(.reply):not(.dm)').length);
+	sch.debug("reply tweets: "  + jQuery('#my-timeline div.timeline-entry.reply').length);
+	sch.debug("dm tweets: "     + jQuery('#my-timeline div.timeline-entry.dm').length);	
+	sch.debug("jQuery('.timeline').children().length:"+jQuery('.timeline').children().length);
+	sch.debug("jQuery('#my-timeline').get(0).outerHTML:\n"+jQuery('#my-timeline').get(0).outerHTML);
 };
 
 

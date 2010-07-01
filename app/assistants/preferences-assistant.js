@@ -13,7 +13,14 @@ PreferencesAssistant.prototype.setup = function() {
 
 	this.scroller = this.controller.getSceneScroller();
 	
-	this.initAppMenu();
+	this.initAppMenu({ 'items':[
+		Mojo.Menu.editItem,
+		{ label: $L('New Search Card'),	command: 'new-search-card' },
+		{ label: $L('Accounts...'), command:'accounts' },
+		{ label: $L('About Spaz'),		command: 'appmenu-about' },
+		{ label: $L('Help...'),			command:Mojo.Menu.helpCmd },
+		{ label: $L('Donate...'),		command:'donate' }
+	]});
 	
 	this.setupCommonMenus({
 		viewMenuItems: [
@@ -33,7 +40,7 @@ PreferencesAssistant.prototype.setup = function() {
 	*/
 	this.model = {
 		'sound-enabled': 			sc.app.prefs.get('sound-enabled'),
-		'vibration-enabled': 			sc.app.prefs.get('vibration-enabled'),
+		'vibration-enabled': 		sc.app.prefs.get('vibration-enabled'),
 		'timeline-scrollonupdate': 	sc.app.prefs.get('timeline-scrollonupdate'),
 		'twitter-api-base-url': 	sc.app.prefs.get('twitter-api-base-url'),
 		'network-refreshinterval': 	sc.app.prefs.get('network-refreshinterval'),
@@ -42,7 +49,14 @@ PreferencesAssistant.prototype.setup = function() {
 		'timeline-replies-getcount':sc.app.prefs.get('timeline-replies-getcount'),
 		'timeline-dm-getcount':     sc.app.prefs.get('timeline-dm-getcount'),
 		'timeline-text-size':       sc.app.prefs.get('timeline-text-size'),
-		'image-uploader':           sc.app.prefs.get('image-uploader')
+		'image-uploader':           sc.app.prefs.get('image-uploader'),
+		'notify-newmessages':       sc.app.prefs.get('notify-newmessages'),
+		'notify-mentions':          sc.app.prefs.get('notify-mentions'),
+		'notify-dms':               sc.app.prefs.get('notify-dms'),
+		'notify-searchresults':     sc.app.prefs.get('notify-searchresults'),
+		'post-rt-cursor-position':  sc.app.prefs.get('post-rt-cursor-position'),
+		'post-send-on-enter':       sc.app.prefs.get('post-send-on-enter')
+		
 	};
 	
 	
@@ -78,12 +92,62 @@ PreferencesAssistant.prototype.setup = function() {
 		this.model
 	);
 	
+
+	/*
+		Notification preferences
+	*/
+	this.controller.setupWidget("checkbox-notify-newmessages",
+		this.soundEnabledAtts = {
+			fieldName: 'notify-newmessages',
+			modelProperty: 'notify-newmessages',
+			disabledProperty: 'notify-newmessages_disabled'
+		},
+		this.model
+	);
+	this.controller.setupWidget("checkbox-notify-mentions",
+		this.soundEnabledAtts = {
+			fieldName: 'notify-mentions',
+			modelProperty: 'notify-mentions',
+			disabledProperty: 'notify-mentions_disabled'
+		},
+		this.model
+	);
+	this.controller.setupWidget("checkbox-notify-dms",
+		this.soundEnabledAtts = {
+			fieldName: 'notify-dms',
+			modelProperty: 'notify-dms',
+			disabledProperty: 'notify-dms_disabled'
+		},
+		this.model
+	);
+	this.controller.setupWidget("checkbox-notify-searchresults",
+		this.soundEnabledAtts = {
+			fieldName: 'notify-searchresults',
+			modelProperty: 'notify-searchresults',
+			disabledProperty: 'notify-searchresults_disabled'
+		},
+		this.model
+	);
+	this.controller.setupWidget("checkbox-post-send-on-enter",
+		this.soundEnabledAtts = {
+			fieldName: 'post-send-on-enter',
+			modelProperty: 'post-send-on-enter',
+			disabledProperty: 'post-send-on-enter_disabled'
+		},
+		this.model
+	);
+	
 	/*
 		temporarily disabling sound and vibration prefs until we can sort out how to tell if sound is off
 	*/
 	// this.controller.listen('checkbox-sound-enabled', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
 	// this.controller.listen('checkbox-vibration-enabled', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
 	this.controller.listen('checkbox-timeline-scrollonupdate', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
+	this.controller.listen('checkbox-notify-newmessages', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
+	this.controller.listen('checkbox-notify-mentions', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
+	this.controller.listen('checkbox-notify-dms', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
+	this.controller.listen('checkbox-notify-searchresults', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
+	this.controller.listen('checkbox-post-send-on-enter', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
 
 
 	/*
@@ -152,6 +216,19 @@ PreferencesAssistant.prototype.setup = function() {
 		this.model
 	);
 	this.controller.listen('timeline-text-size', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
+
+
+	this.controller.setupWidget('post-rt-cursor-position',
+		{
+			label: $L('RT/Q. Cursor Position'),
+			choices: this.validRTCursorPositions,
+			modelProperty:'post-rt-cursor-position'
+		},
+		this.model
+	);
+	this.controller.listen('post-rt-cursor-position', Mojo.Event.propertyChange, this.saveSettings.bindAsEventListener(this));
+
+
 	
 	this.controller.setupWidget('image-uploader',
 		{
@@ -166,7 +243,7 @@ PreferencesAssistant.prototype.setup = function() {
 	/*
 		clear cache button
 	*/
-	Mojo.Event.listen($('clear-cache-button'), Mojo.Event.tap, function(e) {
+	Mojo.Event.listen(jQuery('#clear-cache-button')[0], Mojo.Event.tap, function(e) {
 		thisA.clearTimelineCache();
 	});
 
@@ -205,14 +282,20 @@ PreferencesAssistant.prototype.setupChoices = function(){
 		{label:$L('10'), value:10},
 		{label:$L('20'), value:20},
 		{label:$L('40'), value:40},
-		{label:$L('60'), value:60}
+		{label:$L('60'), value:60},
+		{label:$L('100'), value:100},
+		{label:$L('200'), value:200}
 	];
 	
 	this.validInitialLoadsDmReply = [
 		{label:$L('2'), value:2},
 		{label:$L('5'), value:5},
 		{label:$L('10'), value:10},
-		{label:$L('20'), value:20}
+		{label:$L('20'), value:20},
+		{label:$L('40'), value:40},
+		{label:$L('60'), value:60},
+		{label:$L('100'), value:100},
+		{label:$L('200'), value:200}		
 	];
 	
 	this.validTimelineTextSizes = [
@@ -221,8 +304,13 @@ PreferencesAssistant.prototype.setupChoices = function(){
 		{label:$L('Venti'), value:'venti'}		
 	];
 	
-	var spm = new SpazPhotoMailer();
-	var uploaders = spm.getAPILabels();
+	this.validRTCursorPositions = [
+		{label:$L('Beginning'),  value:'beginning'}, 
+		{label:$L('End'),value:'end'}
+	];
+	
+	var sfu = new SpazFileUploader();
+	var uploaders = sfu.getAPILabels();
 	this.validImageUploaders = [];
 	for (var i=0; i < uploaders.length; i++) {
 		this.validImageUploaders.push({label:$L(uploaders[i]),  value:uploaders[i]});
@@ -254,7 +342,7 @@ PreferencesAssistant.prototype.cleanup = function(event) {
 	this.controller.stopListening('timeline-text-size', Mojo.Event.propertyChange, this.saveSettings);
 
 
-	Mojo.Event.stopListening($('clear-cache-button'), Mojo.Event.tap, function(e) {
+	Mojo.Event.stopListening(jQuery('#clear-cache-button')[0], Mojo.Event.tap, function(e) {
 		thisA.clearTimelineCache();
 	});
 	
@@ -264,5 +352,9 @@ PreferencesAssistant.prototype.cleanup = function(event) {
 	// this.controller.stopListening('checkbox-sound-enabled', Mojo.Event.propertyChange, this.saveSettings);
 	// this.controller.stopListening('checkbox-vibration-enabled', Mojo.Event.propertyChange, this.saveSettings);
 	this.controller.stopListening('checkbox-timeline-scrollonupdate', Mojo.Event.propertyChange, this.saveSettings);
+	this.controller.stopListening('checkbox-timeline-newmessages', Mojo.Event.propertyChange, this.saveSettings);
+	this.controller.stopListening('checkbox-timeline-mentions', Mojo.Event.propertyChange, this.saveSettings);
+	this.controller.stopListening('checkbox-timeline-dms', Mojo.Event.propertyChange, this.saveSettings);
+	this.controller.stopListening('checkbox-timeline-searchresults', Mojo.Event.propertyChange, this.saveSettings);
 	
 };

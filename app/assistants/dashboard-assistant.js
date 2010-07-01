@@ -1,12 +1,22 @@
-function DashboardAssistant(launchArgs) {
-	this.title = launchArgs.title;
-	this.message = launchArgs.message; 
-	this.count = launchArgs.count;
-	this.fromstage = launchArgs.fromstage || 'main';
+function DashboardAssistant(args) {
+
+	this.default_args = {
+		'template_data': {
+			'title':'Dashboard Title',
+			'message':'Dashboard Message',
+			'count':99			
+		},
+		'fromstage':SPAZ_MAIN_STAGENAME,
+		'template':'dashboard/item-info'
+	};
+	
+	this.args = sch.defaults(this.default_args, args);
+	
 };
 
+
 DashboardAssistant.prototype.setup = function() {
-	this.updateDashboard(this.title, this.message, this.count);
+	this.updateDashboard();
 
 	var switchButton = this.controller.get("dashboardinfo"); 
 	Mojo.Event.listen(switchButton, Mojo.Event.tap, this.launchMain.bindAsEventListener(this));
@@ -36,13 +46,15 @@ DashboardAssistant.prototype.cleanup = function(event) {
 };
 
 
-DashboardAssistant.prototype.updateDashboard = function(title, message, count) { 
-	var info = {'title': title, 'message': message, 'count': count}; 
+DashboardAssistant.prototype.updateDashboard = function(args) { 
+	
+	this.args = sch.defaults(this.default_args, args);
+	
 	/*
 		Use render to convert the object and its properties
 		along with a view file into a string containing HTML
 	*/
-	var renderedInfo = Mojo.View.render({object: info, template: 'dashboard/item-info'}); 
+	var renderedInfo = Mojo.View.render({object: this.args.template_data, template: this.args.template}); 
 	var infoElement	 = this.controller.get('dashboardinfo'); 
 	infoElement.update(renderedInfo); 
 }; 
@@ -58,7 +70,7 @@ DashboardAssistant.prototype.launchMain = function() {
 		 method: 'launch', 
 		 parameters: { 
 			 id: Mojo.appInfo.id, 
-			 params: {'fromstage':this.fromstage} 
+			 params: {'fromstage':this.args.fromstage} 
 		 } 
 	}); 
 	this.controller.window.close(); 

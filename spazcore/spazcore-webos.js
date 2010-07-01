@@ -1,4 +1,4 @@
-/*********** Built 2009-11-07 23:06:06 EST ***********/
+/*********** Built 2010-03-03 10:17:54 EST ***********/
 /*jslint 
 browser: true,
 nomen: false,
@@ -2780,6 +2780,1665 @@ replace(/(?:^|:|,)(?:\s*\[)+/g, ''))) {
         };
     }
 })();
+/*!
+ * Sizzle CSS Selector Engine - v1.0
+ *  Copyright 2009, The Dojo Foundation
+ *  Released under the MIT, BSD, and GPL Licenses.
+ *  More information: http://sizzlejs.com/
+ */
+(function(){
+
+var chunker = /((?:\((?:\([^()]+\)|[^()]+)+\)|\[(?:\[[^[\]]*\]|['"][^'"]*['"]|[^[\]'"]+)+\]|\\.|[^ >+~,(\[\\]+)+|[>+~])(\s*,\s*)?((?:.|\r|\n)*)/g,
+	done = 0,
+	toString = Object.prototype.toString,
+	hasDuplicate = false,
+	baseHasDuplicate = true;
+
+// Here we check if the JavaScript engine is using some sort of
+// optimization where it does not always call our comparision
+// function. If that is the case, discard the hasDuplicate value.
+//   Thus far that includes Google Chrome.
+[0, 0].sort(function(){
+	baseHasDuplicate = false;
+	return 0;
+});
+
+var Sizzle = function(selector, context, results, seed) {
+	results = results || [];
+	var origContext = context = context || document;
+
+	if ( context.nodeType !== 1 && context.nodeType !== 9 ) {
+		return [];
+	}
+	
+	if ( !selector || typeof selector !== "string" ) {
+		return results;
+	}
+
+	var parts = [], m, set, checkSet, extra, prune = true, contextXML = isXML(context),
+		soFar = selector;
+	
+	// Reset the position of the chunker regexp (start from head)
+	while ( (chunker.exec(""), m = chunker.exec(soFar)) !== null ) {
+		soFar = m[3];
+		
+		parts.push( m[1] );
+		
+		if ( m[2] ) {
+			extra = m[3];
+			break;
+		}
+	}
+
+	if ( parts.length > 1 && origPOS.exec( selector ) ) {
+		if ( parts.length === 2 && Expr.relative[ parts[0] ] ) {
+			set = posProcess( parts[0] + parts[1], context );
+		} else {
+			set = Expr.relative[ parts[0] ] ?
+				[ context ] :
+				Sizzle( parts.shift(), context );
+
+			while ( parts.length ) {
+				selector = parts.shift();
+
+				if ( Expr.relative[ selector ] ) {
+					selector += parts.shift();
+				}
+				
+				set = posProcess( selector, set );
+			}
+		}
+	} else {
+		// Take a shortcut and set the context if the root selector is an ID
+		// (but not if it'll be faster if the inner selector is an ID)
+		if ( !seed && parts.length > 1 && context.nodeType === 9 && !contextXML &&
+				Expr.match.ID.test(parts[0]) && !Expr.match.ID.test(parts[parts.length - 1]) ) {
+			var ret = Sizzle.find( parts.shift(), context, contextXML );
+			context = ret.expr ? Sizzle.filter( ret.expr, ret.set )[0] : ret.set[0];
+		}
+
+		if ( context ) {
+			var ret = seed ?
+				{ expr: parts.pop(), set: makeArray(seed) } :
+				Sizzle.find( parts.pop(), parts.length === 1 && (parts[0] === "~" || parts[0] === "+") && context.parentNode ? context.parentNode : context, contextXML );
+			set = ret.expr ? Sizzle.filter( ret.expr, ret.set ) : ret.set;
+
+			if ( parts.length > 0 ) {
+				checkSet = makeArray(set);
+			} else {
+				prune = false;
+			}
+
+			while ( parts.length ) {
+				var cur = parts.pop(), pop = cur;
+
+				if ( !Expr.relative[ cur ] ) {
+					cur = "";
+				} else {
+					pop = parts.pop();
+				}
+
+				if ( pop == null ) {
+					pop = context;
+				}
+
+				Expr.relative[ cur ]( checkSet, pop, contextXML );
+			}
+		} else {
+			checkSet = parts = [];
+		}
+	}
+
+	if ( !checkSet ) {
+		checkSet = set;
+	}
+
+	if ( !checkSet ) {
+		throw "Syntax error, unrecognized expression: " + (cur || selector);
+	}
+
+	if ( toString.call(checkSet) === "[object Array]" ) {
+		if ( !prune ) {
+			results.push.apply( results, checkSet );
+		} else if ( context && context.nodeType === 1 ) {
+			for ( var i = 0; checkSet[i] != null; i++ ) {
+				if ( checkSet[i] && (checkSet[i] === true || checkSet[i].nodeType === 1 && contains(context, checkSet[i])) ) {
+					results.push( set[i] );
+				}
+			}
+		} else {
+			for ( var i = 0; checkSet[i] != null; i++ ) {
+				if ( checkSet[i] && checkSet[i].nodeType === 1 ) {
+					results.push( set[i] );
+				}
+			}
+		}
+	} else {
+		makeArray( checkSet, results );
+	}
+
+	if ( extra ) {
+		Sizzle( extra, origContext, results, seed );
+		Sizzle.uniqueSort( results );
+	}
+
+	return results;
+};
+
+Sizzle.uniqueSort = function(results){
+	if ( sortOrder ) {
+		hasDuplicate = baseHasDuplicate;
+		results.sort(sortOrder);
+
+		if ( hasDuplicate ) {
+			for ( var i = 1; i < results.length; i++ ) {
+				if ( results[i] === results[i-1] ) {
+					results.splice(i--, 1);
+				}
+			}
+		}
+	}
+
+	return results;
+};
+
+Sizzle.matches = function(expr, set){
+	return Sizzle(expr, null, null, set);
+};
+
+Sizzle.find = function(expr, context, isXML){
+	var set, match;
+
+	if ( !expr ) {
+		return [];
+	}
+
+	for ( var i = 0, l = Expr.order.length; i < l; i++ ) {
+		var type = Expr.order[i], match;
+		
+		if ( (match = Expr.leftMatch[ type ].exec( expr )) ) {
+			var left = match[1];
+			match.splice(1,1);
+
+			if ( left.substr( left.length - 1 ) !== "\\" ) {
+				match[1] = (match[1] || "").replace(/\\/g, "");
+				set = Expr.find[ type ]( match, context, isXML );
+				if ( set != null ) {
+					expr = expr.replace( Expr.match[ type ], "" );
+					break;
+				}
+			}
+		}
+	}
+
+	if ( !set ) {
+		set = context.getElementsByTagName("*");
+	}
+
+	return {set: set, expr: expr};
+};
+
+Sizzle.filter = function(expr, set, inplace, not){
+	var old = expr, result = [], curLoop = set, match, anyFound,
+		isXMLFilter = set && set[0] && isXML(set[0]);
+
+	while ( expr && set.length ) {
+		for ( var type in Expr.filter ) {
+			if ( (match = Expr.match[ type ].exec( expr )) != null ) {
+				var filter = Expr.filter[ type ], found, item;
+				anyFound = false;
+
+				if ( curLoop == result ) {
+					result = [];
+				}
+
+				if ( Expr.preFilter[ type ] ) {
+					match = Expr.preFilter[ type ]( match, curLoop, inplace, result, not, isXMLFilter );
+
+					if ( !match ) {
+						anyFound = found = true;
+					} else if ( match === true ) {
+						continue;
+					}
+				}
+
+				if ( match ) {
+					for ( var i = 0; (item = curLoop[i]) != null; i++ ) {
+						if ( item ) {
+							found = filter( item, match, i, curLoop );
+							var pass = not ^ !!found;
+
+							if ( inplace && found != null ) {
+								if ( pass ) {
+									anyFound = true;
+								} else {
+									curLoop[i] = false;
+								}
+							} else if ( pass ) {
+								result.push( item );
+								anyFound = true;
+							}
+						}
+					}
+				}
+
+				if ( found !== undefined ) {
+					if ( !inplace ) {
+						curLoop = result;
+					}
+
+					expr = expr.replace( Expr.match[ type ], "" );
+
+					if ( !anyFound ) {
+						return [];
+					}
+
+					break;
+				}
+			}
+		}
+
+		// Improper expression
+		if ( expr == old ) {
+			if ( anyFound == null ) {
+				throw "Syntax error, unrecognized expression: " + expr;
+			} else {
+				break;
+			}
+		}
+
+		old = expr;
+	}
+
+	return curLoop;
+};
+
+var Expr = Sizzle.selectors = {
+	order: [ "ID", "NAME", "TAG" ],
+	match: {
+		ID: /#((?:[\w\u00c0-\uFFFF-]|\\.)+)/,
+		CLASS: /\.((?:[\w\u00c0-\uFFFF-]|\\.)+)/,
+		NAME: /\[name=['"]*((?:[\w\u00c0-\uFFFF-]|\\.)+)['"]*\]/,
+		ATTR: /\[\s*((?:[\w\u00c0-\uFFFF-]|\\.)+)\s*(?:(\S?=)\s*(['"]*)(.*?)\3|)\s*\]/,
+		TAG: /^((?:[\w\u00c0-\uFFFF\*-]|\\.)+)/,
+		CHILD: /:(only|nth|last|first)-child(?:\((even|odd|[\dn+-]*)\))?/,
+		POS: /:(nth|eq|gt|lt|first|last|even|odd)(?:\((\d*)\))?(?=[^-]|$)/,
+		PSEUDO: /:((?:[\w\u00c0-\uFFFF-]|\\.)+)(?:\((['"]*)((?:\([^\)]+\)|[^\2\(\)]*)+)\2\))?/
+	},
+	leftMatch: {},
+	attrMap: {
+		"class": "className",
+		"for": "htmlFor"
+	},
+	attrHandle: {
+		href: function(elem){
+			return elem.getAttribute("href");
+		}
+	},
+	relative: {
+		"+": function(checkSet, part){
+			var isPartStr = typeof part === "string",
+				isTag = isPartStr && !/\W/.test(part),
+				isPartStrNotTag = isPartStr && !isTag;
+
+			if ( isTag ) {
+				part = part.toLowerCase();
+			}
+
+			for ( var i = 0, l = checkSet.length, elem; i < l; i++ ) {
+				if ( (elem = checkSet[i]) ) {
+					while ( (elem = elem.previousSibling) && elem.nodeType !== 1 ) {}
+
+					checkSet[i] = isPartStrNotTag || elem && elem.nodeName.toLowerCase() === part ?
+						elem || false :
+						elem === part;
+				}
+			}
+
+			if ( isPartStrNotTag ) {
+				Sizzle.filter( part, checkSet, true );
+			}
+		},
+		">": function(checkSet, part){
+			var isPartStr = typeof part === "string";
+
+			if ( isPartStr && !/\W/.test(part) ) {
+				part = part.toLowerCase();
+
+				for ( var i = 0, l = checkSet.length; i < l; i++ ) {
+					var elem = checkSet[i];
+					if ( elem ) {
+						var parent = elem.parentNode;
+						checkSet[i] = parent.nodeName.toLowerCase() === part ? parent : false;
+					}
+				}
+			} else {
+				for ( var i = 0, l = checkSet.length; i < l; i++ ) {
+					var elem = checkSet[i];
+					if ( elem ) {
+						checkSet[i] = isPartStr ?
+							elem.parentNode :
+							elem.parentNode === part;
+					}
+				}
+
+				if ( isPartStr ) {
+					Sizzle.filter( part, checkSet, true );
+				}
+			}
+		},
+		"": function(checkSet, part){
+			var doneName = done++, checkFn = dirCheck;
+
+			if ( !/\W/.test(part) ) {
+				var nodeCheck = part = part.toLowerCase();
+				checkFn = dirNodeCheck;
+			}
+
+			checkFn("parentNode", part, doneName, checkSet, nodeCheck, isXML);
+		},
+		"~": function(checkSet, part){
+			var doneName = done++, checkFn = dirCheck;
+
+			if ( typeof part === "string" && !/\W/.test(part) ) {
+				var nodeCheck = part = part.toLowerCase();
+				checkFn = dirNodeCheck;
+			}
+
+			checkFn("previousSibling", part, doneName, checkSet, nodeCheck, isXML);
+		}
+	},
+	find: {
+		ID: function(match, context, isXML){
+			if ( typeof context.getElementById !== "undefined" && !isXML ) {
+				var m = context.getElementById(match[1]);
+				return m ? [m] : [];
+			}
+		},
+		NAME: function(match, context){
+			if ( typeof context.getElementsByName !== "undefined" ) {
+				var ret = [], results = context.getElementsByName(match[1]);
+
+				for ( var i = 0, l = results.length; i < l; i++ ) {
+					if ( results[i].getAttribute("name") === match[1] ) {
+						ret.push( results[i] );
+					}
+				}
+
+				return ret.length === 0 ? null : ret;
+			}
+		},
+		TAG: function(match, context){
+			return context.getElementsByTagName(match[1]);
+		}
+	},
+	preFilter: {
+		CLASS: function(match, curLoop, inplace, result, not, isXML){
+			match = " " + match[1].replace(/\\/g, "") + " ";
+
+			if ( isXML ) {
+				return match;
+			}
+
+			for ( var i = 0, elem; (elem = curLoop[i]) != null; i++ ) {
+				if ( elem ) {
+					if ( not ^ (elem.className && (" " + elem.className + " ").replace(/[\t\n]/g, " ").indexOf(match) >= 0) ) {
+						if ( !inplace ) {
+							result.push( elem );
+						}
+					} else if ( inplace ) {
+						curLoop[i] = false;
+					}
+				}
+			}
+
+			return false;
+		},
+		ID: function(match){
+			return match[1].replace(/\\/g, "");
+		},
+		TAG: function(match, curLoop){
+			return match[1].toLowerCase();
+		},
+		CHILD: function(match){
+			if ( match[1] == "nth" ) {
+				// parse equations like 'even', 'odd', '5', '2n', '3n+2', '4n-1', '-n+6'
+				var test = /(-?)(\d*)n((?:\+|-)?\d*)/.exec(
+					match[2] == "even" && "2n" || match[2] == "odd" && "2n+1" ||
+					!/\D/.test( match[2] ) && "0n+" + match[2] || match[2]);
+
+				// calculate the numbers (first)n+(last) including if they are negative
+				match[2] = (test[1] + (test[2] || 1)) - 0;
+				match[3] = test[3] - 0;
+			}
+
+			// TODO: Move to normal caching system
+			match[0] = done++;
+
+			return match;
+		},
+		ATTR: function(match, curLoop, inplace, result, not, isXML){
+			var name = match[1].replace(/\\/g, "");
+			
+			if ( !isXML && Expr.attrMap[name] ) {
+				match[1] = Expr.attrMap[name];
+			}
+
+			if ( match[2] === "~=" ) {
+				match[4] = " " + match[4] + " ";
+			}
+
+			return match;
+		},
+		PSEUDO: function(match, curLoop, inplace, result, not){
+			if ( match[1] === "not" ) {
+				// If we're dealing with a complex expression, or a simple one
+				if ( ( chunker.exec(match[3]) || "" ).length > 1 || /^\w/.test(match[3]) ) {
+					match[3] = Sizzle(match[3], null, null, curLoop);
+				} else {
+					var ret = Sizzle.filter(match[3], curLoop, inplace, true ^ not);
+					if ( !inplace ) {
+						result.push.apply( result, ret );
+					}
+					return false;
+				}
+			} else if ( Expr.match.POS.test( match[0] ) || Expr.match.CHILD.test( match[0] ) ) {
+				return true;
+			}
+			
+			return match;
+		},
+		POS: function(match){
+			match.unshift( true );
+			return match;
+		}
+	},
+	filters: {
+		enabled: function(elem){
+			return elem.disabled === false && elem.type !== "hidden";
+		},
+		disabled: function(elem){
+			return elem.disabled === true;
+		},
+		checked: function(elem){
+			return elem.checked === true;
+		},
+		selected: function(elem){
+			// Accessing this property makes selected-by-default
+			// options in Safari work properly
+			elem.parentNode.selectedIndex;
+			return elem.selected === true;
+		},
+		parent: function(elem){
+			return !!elem.firstChild;
+		},
+		empty: function(elem){
+			return !elem.firstChild;
+		},
+		has: function(elem, i, match){
+			return !!Sizzle( match[3], elem ).length;
+		},
+		header: function(elem){
+			return /h\d/i.test( elem.nodeName );
+		},
+		text: function(elem){
+			return "text" === elem.type;
+		},
+		radio: function(elem){
+			return "radio" === elem.type;
+		},
+		checkbox: function(elem){
+			return "checkbox" === elem.type;
+		},
+		file: function(elem){
+			return "file" === elem.type;
+		},
+		password: function(elem){
+			return "password" === elem.type;
+		},
+		submit: function(elem){
+			return "submit" === elem.type;
+		},
+		image: function(elem){
+			return "image" === elem.type;
+		},
+		reset: function(elem){
+			return "reset" === elem.type;
+		},
+		button: function(elem){
+			return "button" === elem.type || elem.nodeName.toLowerCase() === "button";
+		},
+		input: function(elem){
+			return /input|select|textarea|button/i.test(elem.nodeName);
+		}
+	},
+	setFilters: {
+		first: function(elem, i){
+			return i === 0;
+		},
+		last: function(elem, i, match, array){
+			return i === array.length - 1;
+		},
+		even: function(elem, i){
+			return i % 2 === 0;
+		},
+		odd: function(elem, i){
+			return i % 2 === 1;
+		},
+		lt: function(elem, i, match){
+			return i < match[3] - 0;
+		},
+		gt: function(elem, i, match){
+			return i > match[3] - 0;
+		},
+		nth: function(elem, i, match){
+			return match[3] - 0 == i;
+		},
+		eq: function(elem, i, match){
+			return match[3] - 0 == i;
+		}
+	},
+	filter: {
+		PSEUDO: function(elem, match, i, array){
+			var name = match[1], filter = Expr.filters[ name ];
+
+			if ( filter ) {
+				return filter( elem, i, match, array );
+			} else if ( name === "contains" ) {
+				return (elem.textContent || elem.innerText || getText([ elem ]) || "").indexOf(match[3]) >= 0;
+			} else if ( name === "not" ) {
+				var not = match[3];
+
+				for ( var i = 0, l = not.length; i < l; i++ ) {
+					if ( not[i] === elem ) {
+						return false;
+					}
+				}
+
+				return true;
+			}
+		},
+		CHILD: function(elem, match){
+			var type = match[1], node = elem;
+			switch (type) {
+				case 'only':
+				case 'first':
+					while ( (node = node.previousSibling) )	 {
+						if ( node.nodeType === 1 ) { 
+							return false; 
+						}
+					}
+					if ( type == 'first') { 
+						return true; 
+					}
+					node = elem;
+				case 'last':
+					while ( (node = node.nextSibling) )	 {
+						if ( node.nodeType === 1 ) { 
+							return false; 
+						}
+					}
+					return true;
+				case 'nth':
+					var first = match[2], last = match[3];
+
+					if ( first == 1 && last == 0 ) {
+						return true;
+					}
+					
+					var doneName = match[0],
+						parent = elem.parentNode;
+	
+					if ( parent && (parent.sizcache !== doneName || !elem.nodeIndex) ) {
+						var count = 0;
+						for ( node = parent.firstChild; node; node = node.nextSibling ) {
+							if ( node.nodeType === 1 ) {
+								node.nodeIndex = ++count;
+							}
+						} 
+						parent.sizcache = doneName;
+					}
+					
+					var diff = elem.nodeIndex - last;
+					if ( first == 0 ) {
+						return diff == 0;
+					} else {
+						return ( diff % first == 0 && diff / first >= 0 );
+					}
+			}
+		},
+		ID: function(elem, match){
+			return elem.nodeType === 1 && elem.getAttribute("id") === match;
+		},
+		TAG: function(elem, match){
+			return (match === "*" && elem.nodeType === 1) || elem.nodeName.toLowerCase() === match;
+		},
+		CLASS: function(elem, match){
+			return (" " + (elem.className || elem.getAttribute("class")) + " ")
+				.indexOf( match ) > -1;
+		},
+		ATTR: function(elem, match){
+			var name = match[1],
+				result = Expr.attrHandle[ name ] ?
+					Expr.attrHandle[ name ]( elem ) :
+					elem[ name ] != null ?
+						elem[ name ] :
+						elem.getAttribute( name ),
+				value = result + "",
+				type = match[2],
+				check = match[4];
+
+			return result == null ?
+				type === "!=" :
+				type === "=" ?
+				value === check :
+				type === "*=" ?
+				value.indexOf(check) >= 0 :
+				type === "~=" ?
+				(" " + value + " ").indexOf(check) >= 0 :
+				!check ?
+				value && result !== false :
+				type === "!=" ?
+				value != check :
+				type === "^=" ?
+				value.indexOf(check) === 0 :
+				type === "$=" ?
+				value.substr(value.length - check.length) === check :
+				type === "|=" ?
+				value === check || value.substr(0, check.length + 1) === check + "-" :
+				false;
+		},
+		POS: function(elem, match, i, array){
+			var name = match[2], filter = Expr.setFilters[ name ];
+
+			if ( filter ) {
+				return filter( elem, i, match, array );
+			}
+		}
+	}
+};
+
+var origPOS = Expr.match.POS;
+
+for ( var type in Expr.match ) {
+	Expr.match[ type ] = new RegExp( Expr.match[ type ].source + /(?![^\[]*\])(?![^\(]*\))/.source );
+	Expr.leftMatch[ type ] = new RegExp( /(^(?:.|\r|\n)*?)/.source + Expr.match[ type ].source );
+}
+
+var makeArray = function(array, results) {
+	array = Array.prototype.slice.call( array, 0 );
+
+	if ( results ) {
+		results.push.apply( results, array );
+		return results;
+	}
+	
+	return array;
+};
+
+// Perform a simple check to determine if the browser is capable of
+// converting a NodeList to an array using builtin methods.
+try {
+	Array.prototype.slice.call( document.documentElement.childNodes, 0 );
+
+// Provide a fallback method if it does not work
+} catch(e){
+	makeArray = function(array, results) {
+		var ret = results || [];
+
+		if ( toString.call(array) === "[object Array]" ) {
+			Array.prototype.push.apply( ret, array );
+		} else {
+			if ( typeof array.length === "number" ) {
+				for ( var i = 0, l = array.length; i < l; i++ ) {
+					ret.push( array[i] );
+				}
+			} else {
+				for ( var i = 0; array[i]; i++ ) {
+					ret.push( array[i] );
+				}
+			}
+		}
+
+		return ret;
+	};
+}
+
+var sortOrder;
+
+if ( document.documentElement.compareDocumentPosition ) {
+	sortOrder = function( a, b ) {
+		if ( !a.compareDocumentPosition || !b.compareDocumentPosition ) {
+			if ( a == b ) {
+				hasDuplicate = true;
+			}
+			return a.compareDocumentPosition ? -1 : 1;
+		}
+
+		var ret = a.compareDocumentPosition(b) & 4 ? -1 : a === b ? 0 : 1;
+		if ( ret === 0 ) {
+			hasDuplicate = true;
+		}
+		return ret;
+	};
+} else if ( "sourceIndex" in document.documentElement ) {
+	sortOrder = function( a, b ) {
+		if ( !a.sourceIndex || !b.sourceIndex ) {
+			if ( a == b ) {
+				hasDuplicate = true;
+			}
+			return a.sourceIndex ? -1 : 1;
+		}
+
+		var ret = a.sourceIndex - b.sourceIndex;
+		if ( ret === 0 ) {
+			hasDuplicate = true;
+		}
+		return ret;
+	};
+} else if ( document.createRange ) {
+	sortOrder = function( a, b ) {
+		if ( !a.ownerDocument || !b.ownerDocument ) {
+			if ( a == b ) {
+				hasDuplicate = true;
+			}
+			return a.ownerDocument ? -1 : 1;
+		}
+
+		var aRange = a.ownerDocument.createRange(), bRange = b.ownerDocument.createRange();
+		aRange.setStart(a, 0);
+		aRange.setEnd(a, 0);
+		bRange.setStart(b, 0);
+		bRange.setEnd(b, 0);
+		var ret = aRange.compareBoundaryPoints(Range.START_TO_END, bRange);
+		if ( ret === 0 ) {
+			hasDuplicate = true;
+		}
+		return ret;
+	};
+}
+
+// Utility function for retreiving the text value of an array of DOM nodes
+function getText( elems ) {
+	var ret = "", elem;
+
+	for ( var i = 0; elems[i]; i++ ) {
+		elem = elems[i];
+
+		// Get the text from text nodes and CDATA nodes
+		if ( elem.nodeType === 3 || elem.nodeType === 4 ) {
+			ret += elem.nodeValue;
+
+		// Traverse everything else, except comment nodes
+		} else if ( elem.nodeType !== 8 ) {
+			ret += getText( elem.childNodes );
+		}
+	}
+
+	return ret;
+}
+
+// Check to see if the browser returns elements by name when
+// querying by getElementById (and provide a workaround)
+(function(){
+	// We're going to inject a fake input element with a specified name
+	var form = document.createElement("div"),
+		id = "script" + (new Date).getTime();
+	form.innerHTML = "<a name='" + id + "'/>";
+
+	// Inject it into the root element, check its status, and remove it quickly
+	var root = document.documentElement;
+	root.insertBefore( form, root.firstChild );
+
+	// The workaround has to do additional checks after a getElementById
+	// Which slows things down for other browsers (hence the branching)
+	if ( document.getElementById( id ) ) {
+		Expr.find.ID = function(match, context, isXML){
+			if ( typeof context.getElementById !== "undefined" && !isXML ) {
+				var m = context.getElementById(match[1]);
+				return m ? m.id === match[1] || typeof m.getAttributeNode !== "undefined" && m.getAttributeNode("id").nodeValue === match[1] ? [m] : undefined : [];
+			}
+		};
+
+		Expr.filter.ID = function(elem, match){
+			var node = typeof elem.getAttributeNode !== "undefined" && elem.getAttributeNode("id");
+			return elem.nodeType === 1 && node && node.nodeValue === match;
+		};
+	}
+
+	root.removeChild( form );
+	root = form = null; // release memory in IE
+})();
+
+(function(){
+	// Check to see if the browser returns only elements
+	// when doing getElementsByTagName("*")
+
+	// Create a fake element
+	var div = document.createElement("div");
+	div.appendChild( document.createComment("") );
+
+	// Make sure no comments are found
+	if ( div.getElementsByTagName("*").length > 0 ) {
+		Expr.find.TAG = function(match, context){
+			var results = context.getElementsByTagName(match[1]);
+
+			// Filter out possible comments
+			if ( match[1] === "*" ) {
+				var tmp = [];
+
+				for ( var i = 0; results[i]; i++ ) {
+					if ( results[i].nodeType === 1 ) {
+						tmp.push( results[i] );
+					}
+				}
+
+				results = tmp;
+			}
+
+			return results;
+		};
+	}
+
+	// Check to see if an attribute returns normalized href attributes
+	div.innerHTML = "<a href='#'></a>";
+	if ( div.firstChild && typeof div.firstChild.getAttribute !== "undefined" &&
+			div.firstChild.getAttribute("href") !== "#" ) {
+		Expr.attrHandle.href = function(elem){
+			return elem.getAttribute("href", 2);
+		};
+	}
+
+	div = null; // release memory in IE
+})();
+
+if ( document.querySelectorAll ) {
+	(function(){
+		var oldSizzle = Sizzle, div = document.createElement("div");
+		div.innerHTML = "<p class='TEST'></p>";
+
+		// Safari can't handle uppercase or unicode characters when
+		// in quirks mode.
+		if ( div.querySelectorAll && div.querySelectorAll(".TEST").length === 0 ) {
+			return;
+		}
+	
+		Sizzle = function(query, context, extra, seed){
+			context = context || document;
+
+			// Only use querySelectorAll on non-XML documents
+			// (ID selectors don't work in non-HTML documents)
+			if ( !seed && context.nodeType === 9 && !isXML(context) ) {
+				try {
+					return makeArray( context.querySelectorAll(query), extra );
+				} catch(e){}
+			}
+		
+			return oldSizzle(query, context, extra, seed);
+		};
+
+		for ( var prop in oldSizzle ) {
+			Sizzle[ prop ] = oldSizzle[ prop ];
+		}
+
+		div = null; // release memory in IE
+	})();
+}
+
+(function(){
+	var div = document.createElement("div");
+
+	div.innerHTML = "<div class='test e'></div><div class='test'></div>";
+
+	// Opera can't find a second classname (in 9.6)
+	// Also, make sure that getElementsByClassName actually exists
+	if ( !div.getElementsByClassName || div.getElementsByClassName("e").length === 0 ) {
+		return;
+	}
+
+	// Safari caches class attributes, doesn't catch changes (in 3.2)
+	div.lastChild.className = "e";
+
+	if ( div.getElementsByClassName("e").length === 1 ) {
+		return;
+	}
+	
+	Expr.order.splice(1, 0, "CLASS");
+	Expr.find.CLASS = function(match, context, isXML) {
+		if ( typeof context.getElementsByClassName !== "undefined" && !isXML ) {
+			return context.getElementsByClassName(match[1]);
+		}
+	};
+
+	div = null; // release memory in IE
+})();
+
+function dirNodeCheck( dir, cur, doneName, checkSet, nodeCheck, isXML ) {
+	var sibDir = dir == "previousSibling" && !isXML;
+	for ( var i = 0, l = checkSet.length; i < l; i++ ) {
+		var elem = checkSet[i];
+		if ( elem ) {
+			if ( sibDir && elem.nodeType === 1 ){
+				elem.sizcache = doneName;
+				elem.sizset = i;
+			}
+			elem = elem[dir];
+			var match = false;
+
+			while ( elem ) {
+				if ( elem.sizcache === doneName ) {
+					match = checkSet[elem.sizset];
+					break;
+				}
+
+				if ( elem.nodeType === 1 && !isXML ){
+					elem.sizcache = doneName;
+					elem.sizset = i;
+				}
+
+				if ( elem.nodeName.toLowerCase() === cur ) {
+					match = elem;
+					break;
+				}
+
+				elem = elem[dir];
+			}
+
+			checkSet[i] = match;
+		}
+	}
+}
+
+function dirCheck( dir, cur, doneName, checkSet, nodeCheck, isXML ) {
+	var sibDir = dir == "previousSibling" && !isXML;
+	for ( var i = 0, l = checkSet.length; i < l; i++ ) {
+		var elem = checkSet[i];
+		if ( elem ) {
+			if ( sibDir && elem.nodeType === 1 ) {
+				elem.sizcache = doneName;
+				elem.sizset = i;
+			}
+			elem = elem[dir];
+			var match = false;
+
+			while ( elem ) {
+				if ( elem.sizcache === doneName ) {
+					match = checkSet[elem.sizset];
+					break;
+				}
+
+				if ( elem.nodeType === 1 ) {
+					if ( !isXML ) {
+						elem.sizcache = doneName;
+						elem.sizset = i;
+					}
+					if ( typeof cur !== "string" ) {
+						if ( elem === cur ) {
+							match = true;
+							break;
+						}
+
+					} else if ( Sizzle.filter( cur, [elem] ).length > 0 ) {
+						match = elem;
+						break;
+					}
+				}
+
+				elem = elem[dir];
+			}
+
+			checkSet[i] = match;
+		}
+	}
+}
+
+var contains = document.compareDocumentPosition ? function(a, b){
+	return a.compareDocumentPosition(b) & 16;
+} : function(a, b){
+	return a !== b && (a.contains ? a.contains(b) : true);
+};
+
+var isXML = function(elem){
+	// documentElement is verified for cases where it doesn't yet exist
+	// (such as loading iframes in IE - #4833) 
+	var documentElement = (elem ? elem.ownerDocument || elem : 0).documentElement;
+	return documentElement ? documentElement.nodeName !== "HTML" : false;
+};
+
+var posProcess = function(selector, context){
+	var tmpSet = [], later = "", match,
+		root = context.nodeType ? [context] : context;
+
+	// Position selectors must be done after the filter
+	// And so must :not(positional) so we move all PSEUDOs to the end
+	while ( (match = Expr.match.PSEUDO.exec( selector )) ) {
+		later += match[0];
+		selector = selector.replace( Expr.match.PSEUDO, "" );
+	}
+
+	selector = Expr.relative[selector] ? selector + "*" : selector;
+
+	for ( var i = 0, l = root.length; i < l; i++ ) {
+		Sizzle( selector, root[i], tmpSet );
+	}
+
+	return Sizzle.filter( later, tmpSet );
+};
+
+// EXPOSE
+
+window.Sizzle = Sizzle;
+
+})();
+// Underscore.js
+// (c) 2009 Jeremy Ashkenas, DocumentCloud Inc.
+// Underscore is freely distributable under the terms of the MIT license.
+// Portions of Underscore are inspired by or borrowed from Prototype.js,
+// Oliver Steele's Functional, and John Resig's Micro-Templating.
+// For all details and documentation:
+// http://documentcloud.github.com/underscore/
+
+(function() {
+
+  /*------------------------- Baseline setup ---------------------------------*/
+
+  // Establish the root object, "window" in the browser, or "global" on the server.
+  var root = this;
+
+  // Save the previous value of the "_" variable.
+  var previousUnderscore = root._;
+
+  // If Underscore is called as a function, it returns a wrapped object that
+  // can be used OO-style. This wrapper holds altered versions of all the
+  // underscore functions. Wrapped objects may be chained.
+  var wrapper = function(obj) { this._wrapped = obj; };
+
+  // Establish the object that gets thrown to break out of a loop iteration.
+  var breaker = typeof StopIteration !== 'undefined' ? StopIteration : '__break__';
+
+  // Create a safe reference to the Underscore object for reference below.
+  var _ = root._ = function(obj) { return new wrapper(obj); };
+
+  // Export the Underscore object for CommonJS.
+  if (typeof exports !== 'undefined') exports._ = _;
+
+  // Create quick reference variables for speed access to core prototypes.
+  var slice                 = Array.prototype.slice,
+      unshift               = Array.prototype.unshift,
+      toString              = Object.prototype.toString,
+      hasOwnProperty        = Object.prototype.hasOwnProperty,
+      propertyIsEnumerable  = Object.prototype.propertyIsEnumerable;
+
+  // Current version.
+  _.VERSION = '0.5.1';
+
+  /*------------------------ Collection Functions: ---------------------------*/
+
+  // The cornerstone, an each implementation.
+  // Handles objects implementing forEach, arrays, and raw objects.
+  _.each = function(obj, iterator, context) {
+    var index = 0;
+    try {
+      if (obj.forEach) {
+        obj.forEach(iterator, context);
+      } else if (_.isArray(obj) || _.isArguments(obj)) {
+        for (var i=0, l=obj.length; i<l; i++) iterator.call(context, obj[i], i, obj);
+      } else {
+        var keys = _.keys(obj), l = keys.length;
+        for (var i=0; i<l; i++) iterator.call(context, obj[keys[i]], keys[i], obj);
+      }
+    } catch(e) {
+      if (e != breaker) throw e;
+    }
+    return obj;
+  };
+
+  // Return the results of applying the iterator to each element. Use JavaScript
+  // 1.6's version of map, if possible.
+  _.map = function(obj, iterator, context) {
+    if (obj && _.isFunction(obj.map)) return obj.map(iterator, context);
+    var results = [];
+    _.each(obj, function(value, index, list) {
+      results.push(iterator.call(context, value, index, list));
+    });
+    return results;
+  };
+
+  // Reduce builds up a single result from a list of values. Also known as
+  // inject, or foldl. Uses JavaScript 1.8's version of reduce, if possible.
+  _.reduce = function(obj, memo, iterator, context) {
+    if (obj && _.isFunction(obj.reduce)) return obj.reduce(_.bind(iterator, context), memo);
+    _.each(obj, function(value, index, list) {
+      memo = iterator.call(context, memo, value, index, list);
+    });
+    return memo;
+  };
+
+  // The right-associative version of reduce, also known as foldr. Uses
+  // JavaScript 1.8's version of reduceRight, if available.
+  _.reduceRight = function(obj, memo, iterator, context) {
+    if (obj && _.isFunction(obj.reduceRight)) return obj.reduceRight(_.bind(iterator, context), memo);
+    var reversed = _.clone(_.toArray(obj)).reverse();
+    _.each(reversed, function(value, index) {
+      memo = iterator.call(context, memo, value, index, obj);
+    });
+    return memo;
+  };
+
+  // Return the first value which passes a truth test.
+  _.detect = function(obj, iterator, context) {
+    var result;
+    _.each(obj, function(value, index, list) {
+      if (iterator.call(context, value, index, list)) {
+        result = value;
+        _.breakLoop();
+      }
+    });
+    return result;
+  };
+
+  // Return all the elements that pass a truth test. Use JavaScript 1.6's
+  // filter(), if it exists.
+  _.select = function(obj, iterator, context) {
+    if (obj && _.isFunction(obj.filter)) return obj.filter(iterator, context);
+    var results = [];
+    _.each(obj, function(value, index, list) {
+      iterator.call(context, value, index, list) && results.push(value);
+    });
+    return results;
+  };
+
+  // Return all the elements for which a truth test fails.
+  _.reject = function(obj, iterator, context) {
+    var results = [];
+    _.each(obj, function(value, index, list) {
+      !iterator.call(context, value, index, list) && results.push(value);
+    });
+    return results;
+  };
+
+  // Determine whether all of the elements match a truth test. Delegate to
+  // JavaScript 1.6's every(), if it is present.
+  _.all = function(obj, iterator, context) {
+    iterator = iterator || _.identity;
+    if (obj && _.isFunction(obj.every)) return obj.every(iterator, context);
+    var result = true;
+    _.each(obj, function(value, index, list) {
+      if (!(result = result && iterator.call(context, value, index, list))) _.breakLoop();
+    });
+    return result;
+  };
+
+  // Determine if at least one element in the object matches a truth test. Use
+  // JavaScript 1.6's some(), if it exists.
+  _.any = function(obj, iterator, context) {
+    iterator = iterator || _.identity;
+    if (obj && _.isFunction(obj.some)) return obj.some(iterator, context);
+    var result = false;
+    _.each(obj, function(value, index, list) {
+      if (result = iterator.call(context, value, index, list)) _.breakLoop();
+    });
+    return result;
+  };
+
+  // Determine if a given value is included in the array or object,
+  // based on '==='.
+  _.include = function(obj, target) {
+    if (_.isArray(obj)) return _.indexOf(obj, target) != -1;
+    var found = false;
+    _.each(obj, function(value) {
+      if (found = value === target) _.breakLoop();
+    });
+    return found;
+  };
+
+  // Invoke a method with arguments on every item in a collection.
+  _.invoke = function(obj, method) {
+    var args = _.rest(arguments, 2);
+    return _.map(obj, function(value) {
+      return (method ? value[method] : value).apply(value, args);
+    });
+  };
+
+  // Convenience version of a common use case of map: fetching a property.
+  _.pluck = function(obj, key) {
+    return _.map(obj, function(value){ return value[key]; });
+  };
+
+  // Return the maximum item or (item-based computation).
+  _.max = function(obj, iterator, context) {
+    if (!iterator && _.isArray(obj)) return Math.max.apply(Math, obj);
+    var result = {computed : -Infinity};
+    _.each(obj, function(value, index, list) {
+      var computed = iterator ? iterator.call(context, value, index, list) : value;
+      computed >= result.computed && (result = {value : value, computed : computed});
+    });
+    return result.value;
+  };
+
+  // Return the minimum element (or element-based computation).
+  _.min = function(obj, iterator, context) {
+    if (!iterator && _.isArray(obj)) return Math.min.apply(Math, obj);
+    var result = {computed : Infinity};
+    _.each(obj, function(value, index, list) {
+      var computed = iterator ? iterator.call(context, value, index, list) : value;
+      computed < result.computed && (result = {value : value, computed : computed});
+    });
+    return result.value;
+  };
+
+  // Sort the object's values by a criteria produced by an iterator.
+  _.sortBy = function(obj, iterator, context) {
+    return _.pluck(_.map(obj, function(value, index, list) {
+      return {
+        value : value,
+        criteria : iterator.call(context, value, index, list)
+      };
+    }).sort(function(left, right) {
+      var a = left.criteria, b = right.criteria;
+      return a < b ? -1 : a > b ? 1 : 0;
+    }), 'value');
+  };
+
+  // Use a comparator function to figure out at what index an object should
+  // be inserted so as to maintain order. Uses binary search.
+  _.sortedIndex = function(array, obj, iterator) {
+    iterator = iterator || _.identity;
+    var low = 0, high = array.length;
+    while (low < high) {
+      var mid = (low + high) >> 1;
+      iterator(array[mid]) < iterator(obj) ? low = mid + 1 : high = mid;
+    }
+    return low;
+  };
+
+  // Convert anything iterable into a real, live array.
+  _.toArray = function(iterable) {
+    if (!iterable)                return [];
+    if (iterable.toArray)         return iterable.toArray();
+    if (_.isArray(iterable))      return iterable;
+    if (_.isArguments(iterable))  return slice.call(iterable);
+    return _.map(iterable, function(val){ return val; });
+  };
+
+  // Return the number of elements in an object.
+  _.size = function(obj) {
+    return _.toArray(obj).length;
+  };
+
+  /*-------------------------- Array Functions: ------------------------------*/
+
+  // Get the first element of an array. Passing "n" will return the first N
+  // values in the array. Aliased as "head". The "guard" check allows it to work
+  // with _.map.
+  _.first = function(array, n, guard) {
+    return n && !guard ? slice.call(array, 0, n) : array[0];
+  };
+
+  // Returns everything but the first entry of the array. Aliased as "tail".
+  // Especially useful on the arguments object. Passing an "index" will return
+  // the rest of the values in the array from that index onward. The "guard"
+   //check allows it to work with _.map.
+  _.rest = function(array, index, guard) {
+    return slice.call(array, _.isUndefined(index) || guard ? 1 : index);
+  };
+
+  // Get the last element of an array.
+  _.last = function(array) {
+    return array[array.length - 1];
+  };
+
+  // Trim out all falsy values from an array.
+  _.compact = function(array) {
+    return _.select(array, function(value){ return !!value; });
+  };
+
+  // Return a completely flattened version of an array.
+  _.flatten = function(array) {
+    return _.reduce(array, [], function(memo, value) {
+      if (_.isArray(value)) return memo.concat(_.flatten(value));
+      memo.push(value);
+      return memo;
+    });
+  };
+
+  // Return a version of the array that does not contain the specified value(s).
+  _.without = function(array) {
+    var values = _.rest(arguments);
+    return _.select(array, function(value){ return !_.include(values, value); });
+  };
+
+  // Produce a duplicate-free version of the array. If the array has already
+  // been sorted, you have the option of using a faster algorithm.
+  _.uniq = function(array, isSorted) {
+    return _.reduce(array, [], function(memo, el, i) {
+      if (0 == i || (isSorted === true ? _.last(memo) != el : !_.include(memo, el))) memo.push(el);
+      return memo;
+    });
+  };
+
+  // Produce an array that contains every item shared between all the
+  // passed-in arrays.
+  _.intersect = function(array) {
+    var rest = _.rest(arguments);
+    return _.select(_.uniq(array), function(item) {
+      return _.all(rest, function(other) {
+        return _.indexOf(other, item) >= 0;
+      });
+    });
+  };
+
+  // Zip together multiple lists into a single array -- elements that share
+  // an index go together.
+  _.zip = function() {
+    var args = _.toArray(arguments);
+    var length = _.max(_.pluck(args, 'length'));
+    var results = new Array(length);
+    for (var i=0; i<length; i++) results[i] = _.pluck(args, String(i));
+    return results;
+  };
+
+  // If the browser doesn't supply us with indexOf (I'm looking at you, MSIE),
+  // we need this function. Return the position of the first occurence of an
+  // item in an array, or -1 if the item is not included in the array.
+  _.indexOf = function(array, item) {
+    if (array.indexOf) return array.indexOf(item);
+    for (var i=0, l=array.length; i<l; i++) if (array[i] === item) return i;
+    return -1;
+  };
+
+  // Provide JavaScript 1.6's lastIndexOf, delegating to the native function,
+  // if possible.
+  _.lastIndexOf = function(array, item) {
+    if (array.lastIndexOf) return array.lastIndexOf(item);
+    var i = array.length;
+    while (i--) if (array[i] === item) return i;
+    return -1;
+  };
+
+  // Generate an integer Array containing an arithmetic progression. A port of
+  // the native Python range() function. See:
+  // http://docs.python.org/library/functions.html#range
+  _.range = function(start, stop, step) {
+    var a     = _.toArray(arguments);
+    var solo  = a.length <= 1;
+    var start = solo ? 0 : a[0], stop = solo ? a[0] : a[1], step = a[2] || 1;
+    var len   = Math.ceil((stop - start) / step);
+    if (len <= 0) return [];
+    var range = new Array(len);
+    for (var i = start, idx = 0; true; i += step) {
+      if ((step > 0 ? i - stop : stop - i) >= 0) return range;
+      range[idx++] = i;
+    }
+  };
+
+  /* ----------------------- Function Functions: -----------------------------*/
+
+  // Create a function bound to a given object (assigning 'this', and arguments,
+  // optionally). Binding with arguments is also known as 'curry'.
+  _.bind = function(func, obj) {
+    var args = _.rest(arguments, 2);
+    return function() {
+      return func.apply(obj || root, args.concat(_.toArray(arguments)));
+    };
+  };
+
+  // Bind all of an object's methods to that object. Useful for ensuring that
+  // all callbacks defined on an object belong to it.
+  _.bindAll = function(obj) {
+    var funcs = _.rest(arguments);
+    if (funcs.length == 0) funcs = _.functions(obj);
+    _.each(funcs, function(f) { obj[f] = _.bind(obj[f], obj); });
+    return obj;
+  };
+
+  // Delays a function for the given number of milliseconds, and then calls
+  // it with the arguments supplied.
+  _.delay = function(func, wait) {
+    var args = _.rest(arguments, 2);
+    return setTimeout(function(){ return func.apply(func, args); }, wait);
+  };
+
+  // Defers a function, scheduling it to run after the current call stack has
+  // cleared.
+  _.defer = function(func) {
+    return _.delay.apply(_, [func, 1].concat(_.rest(arguments)));
+  };
+
+  // Returns the first function passed as an argument to the second,
+  // allowing you to adjust arguments, run code before and after, and
+  // conditionally execute the original function.
+  _.wrap = function(func, wrapper) {
+    return function() {
+      var args = [func].concat(_.toArray(arguments));
+      return wrapper.apply(wrapper, args);
+    };
+  };
+
+  // Returns a function that is the composition of a list of functions, each
+  // consuming the return value of the function that follows.
+  _.compose = function() {
+    var funcs = _.toArray(arguments);
+    return function() {
+      var args = _.toArray(arguments);
+      for (var i=funcs.length-1; i >= 0; i--) {
+        args = [funcs[i].apply(this, args)];
+      }
+      return args[0];
+    };
+  };
+
+  /* ------------------------- Object Functions: ---------------------------- */
+
+  // Retrieve the names of an object's properties.
+  _.keys = function(obj) {
+    if(_.isArray(obj)) return _.range(0, obj.length);
+    var keys = [];
+    for (var key in obj) if (hasOwnProperty.call(obj, key)) keys.push(key);
+    return keys;
+  };
+
+  // Retrieve the values of an object's properties.
+  _.values = function(obj) {
+    return _.map(obj, _.identity);
+  };
+
+  // Return a sorted list of the function names available in Underscore.
+  _.functions = function(obj) {
+    return _.select(_.keys(obj), function(key){ return _.isFunction(obj[key]); }).sort();
+  };
+
+  // Extend a given object with all of the properties in a source object.
+  _.extend = function(destination, source) {
+    for (var property in source) destination[property] = source[property];
+    return destination;
+  };
+
+  // Create a (shallow-cloned) duplicate of an object.
+  _.clone = function(obj) {
+    if (_.isArray(obj)) return obj.slice(0);
+    return _.extend({}, obj);
+  };
+
+  // Perform a deep comparison to check if two objects are equal.
+  _.isEqual = function(a, b) {
+    // Check object identity.
+    if (a === b) return true;
+    // Different types?
+    var atype = typeof(a), btype = typeof(b);
+    if (atype != btype) return false;
+    // Basic equality test (watch out for coercions).
+    if (a == b) return true;
+    // One is falsy and the other truthy.
+    if ((!a && b) || (a && !b)) return false;
+    // One of them implements an isEqual()?
+    if (a.isEqual) return a.isEqual(b);
+    // Check dates' integer values.
+    if (_.isDate(a) && _.isDate(b)) return a.getTime() === b.getTime();
+    // Both are NaN?
+    if (_.isNaN(a) && _.isNaN(b)) return true;
+    // Compare regular expressions.
+    if (_.isRegExp(a) && _.isRegExp(b))
+      return a.source     === b.source &&
+             a.global     === b.global &&
+             a.ignoreCase === b.ignoreCase &&
+             a.multiline  === b.multiline;
+    // If a is not an object by this point, we can't handle it.
+    if (atype !== 'object') return false;
+    // Check for different array lengths before comparing contents.
+    if (a.length && (a.length !== b.length)) return false;
+    // Nothing else worked, deep compare the contents.
+    var aKeys = _.keys(a), bKeys = _.keys(b);
+    // Different object sizes?
+    if (aKeys.length != bKeys.length) return false;
+    // Recursive comparison of contents.
+    for (var key in a) if (!_.isEqual(a[key], b[key])) return false;
+    return true;
+  };
+
+  // Is a given array or object empty?
+  _.isEmpty = function(obj) {
+    return _.keys(obj).length == 0;
+  };
+
+  // Is a given value a DOM element?
+  _.isElement = function(obj) {
+    return !!(obj && obj.nodeType == 1);
+  };
+
+  // Is a given variable an arguments object?
+  _.isArguments = function(obj) {
+    return obj && _.isNumber(obj.length) && !_.isArray(obj) && !propertyIsEnumerable.call(obj, 'length');
+  };
+
+  // Is the given value NaN -- this one is interesting. NaN != NaN, and
+  // isNaN(undefined) == true, so we make sure it's a number first.
+  _.isNaN = function(obj) {
+    return _.isNumber(obj) && isNaN(obj);
+  };
+
+  // Is a given value equal to null?
+  _.isNull = function(obj) {
+    return obj === null;
+  };
+
+  // Is a given variable undefined?
+  _.isUndefined = function(obj) {
+    return typeof obj == 'undefined';
+  };
+
+  // Define the isArray, isDate, isFunction, isNumber, isRegExp, and isString
+  // functions based on their toString identifiers.
+  var types = ['Array', 'Date', 'Function', 'Number', 'RegExp', 'String'];
+  for (var i=0, l=types.length; i<l; i++) {
+    (function() {
+      var identifier = '[object ' + types[i] + ']';
+      _['is' + types[i]] = function(obj) { return toString.call(obj) == identifier; };
+    })();
+  }
+
+  /* -------------------------- Utility Functions: -------------------------- */
+
+  // Run Underscore.js in noConflict mode, returning the '_' variable to its
+  // previous owner. Returns a reference to the Underscore object.
+  _.noConflict = function() {
+    root._ = previousUnderscore;
+    return this;
+  };
+
+  // Keep the identity function around for default iterators.
+  _.identity = function(value) {
+    return value;
+  };
+
+  // Break out of the middle of an iteration.
+  _.breakLoop = function() {
+    throw breaker;
+  };
+
+  // Generate a unique integer id (unique within the entire client session).
+  // Useful for temporary DOM ids.
+  var idCounter = 0;
+  _.uniqueId = function(prefix) {
+    var id = idCounter++;
+    return prefix ? prefix + id : id;
+  };
+
+  // JavaScript templating a-la ERB, pilfered from John Resig's
+  // "Secrets of the JavaScript Ninja", page 83.
+  _.template = function(str, data) {
+    var fn = new Function('obj',
+      'var p=[],print=function(){p.push.apply(p,arguments);};' +
+      'with(obj){p.push(\'' +
+      str
+        .replace(/[\r\t\n]/g, " ")
+        .split("<%").join("\t")
+        .replace(/((^|%>)[^\t]*)'/g, "$1\r")
+        .replace(/\t=(.*?)%>/g, "',$1,'")
+        .split("\t").join("');")
+        .split("%>").join("p.push('")
+        .split("\r").join("\\'")
+    + "');}return p.join('');");
+    return data ? fn(data) : fn;
+  };
+
+  /*------------------------------- Aliases ----------------------------------*/
+
+  _.forEach  = _.each;
+  _.foldl    = _.inject       = _.reduce;
+  _.foldr    = _.reduceRight;
+  _.filter   = _.select;
+  _.every    = _.all;
+  _.some     = _.any;
+  _.head     = _.first;
+  _.tail     = _.rest;
+  _.methods  = _.functions;
+
+  /*------------------------ Setup the OOP Wrapper: --------------------------*/
+
+  // Helper function to continue chaining intermediate results.
+  var result = function(obj, chain) {
+    return chain ? _(obj).chain() : obj;
+  };
+
+  // Add all of the Underscore functions to the wrapper object.
+  _.each(_.functions(_), function(name) {
+    var method = _[name];
+    wrapper.prototype[name] = function() {
+      unshift.call(arguments, this._wrapped);
+      return result(method.apply(_, arguments), this._chain);
+    };
+  });
+
+  // Add all mutator Array functions to the wrapper.
+  _.each(['pop', 'push', 'reverse', 'shift', 'sort', 'splice', 'unshift'], function(name) {
+    var method = Array.prototype[name];
+    wrapper.prototype[name] = function() {
+      method.apply(this._wrapped, arguments);
+      return result(this._wrapped, this._chain);
+    };
+  });
+
+  // Add all accessor Array functions to the wrapper.
+  _.each(['concat', 'join', 'slice'], function(name) {
+    var method = Array.prototype[name];
+    wrapper.prototype[name] = function() {
+      return result(method.apply(this._wrapped, arguments), this._chain);
+    };
+  });
+
+  // Start chaining a wrapped Underscore object.
+  wrapper.prototype.chain = function() {
+    this._chain = true;
+    return this;
+  };
+
+  // Extracts the result from a wrapped and chained object.
+  wrapper.prototype.value = function() {
+    return this._wrapped;
+  };
+
+})();
 /*jslint 
 browser: true,
 nomen: false,
@@ -2798,8 +4457,24 @@ var sc;
 * 
 * This requires date.js
 * http://www.datejs.com/
+* @param {string} time_value a string to convert into relative time
+* @param {object} [labels] labels for text portions of time descriptions
+* @param {boolean} [use_dateparse] Whether or not to use the Date.parse method to parse the time_value. Default is FALSE
 */
-sc.helpers.getRelativeTime = function(time_value, use_dateparse) {	
+sc.helpers.getRelativeTime = function(time_value, labels, use_dateparse) {	
+	
+	var default_labels = {
+		'now':'Just now',
+		'seconds':'sec ago',
+		'minute':'min ago',
+		'minutes':'min ago',
+		'hour':'hr ago',
+		'hours':'hr ago',
+		'day':'day ago',
+		'days':'days ago'	
+	};
+	
+	labels = sch.defaults(default_labels, labels);
 	
 	var parsed_date;
 	
@@ -2813,25 +4488,25 @@ sc.helpers.getRelativeTime = function(time_value, use_dateparse) {
 	var delta = parseInt( (now.getTime() - parsed_date.getTime()) / 1000, 10);
 	
 	if (delta < 10) {
-		return 'Just now';
+		return labels.now;
 	} else if(delta < 60) {
-		return delta.toString() +' sec ago';
+		return delta.toString() +' '+labels.seconds;
 	} else if(delta < 120) {
-		return '1 min ago';
+		return '1 '+labels.minute;
 	} else if(delta < (45*60)) {
-		return Math.round(parseInt(delta / 60, 10)).toString() + ' min ago';
+		return Math.round(parseInt(delta / 60, 10)).toString() + ' ' +labels.minutes;
 	} else if(delta < (90*60)) {
-		return '1 hr ago';
+		return '1 ' +labels.hour;
 	} else if(delta < (24*60*60)) {
 		if (Math.round(delta / 3600) === 1) {
-			return '2 hr ago';
+			return '2 '+labels.hours;
 		} else {
-			return Math.round(delta / 3600).toString() + ' hr ago';
+			return Math.round(delta / 3600).toString() + ' '+labels.hours;
 		}
 	} else if(delta < (48*60*60)) {
-		return '1 day ago';
+		return '1 '+labels.day;
 	} else {
-		return Math.round(delta / 86400).toString() + ' days ago';
+		return Math.round(delta / 86400).toString() + ' '+labels.days;
 	}
 };
 
@@ -2884,27 +4559,33 @@ var SPAZCORE_EVENTDATA_ATTRIBUTE = 'sc_data';
  * @param {object} target
  * @param {string} event_type
  * @param {function} handler  a method that will take the event as a param, and "this" refers to target
- * @param {boolean} use_capture  defaults to false
+ * @param {Object} [scope] the scope to execute the handler within (what "this" refers to)
+ * @param {boolean} [use_capture]  defaults to false
+ * @returns {function} the handler that was passed -- or created, if we passed a scope. You can use this to remove the listener later on
  * @function
  */
 sc.helpers.addListener = function(target, event_type, handler, scope, use_capture) {
 
 	sch.dump('listening for '+event_type);
 	sch.dump('on target nodeName:'+target.nodeName);
-
-
-	function scope_perserver(e) {
-		handler.call(scope, e);
-	}
 	
 	if (use_capture !== true) {
 		use_capture = false;
 	}
 	
+	
+	
 	if (scope) {
-		target.addEventListener(event_type, scope_perserver, use_capture);
+		
+		var __handler = _.bind(handler, scope);
+		target.addEventListener(event_type, __handler, use_capture);
+		return __handler;
+		
 	} else {
+		
 		target.addEventListener(event_type, handler, use_capture);
+		return handler;
+
 	}
 	
 	
@@ -2919,26 +4600,68 @@ sc.helpers.addListener = function(target, event_type, handler, scope, use_captur
  * @param {object} target
  * @param {string} event_type
  * @param {function} handler  a method that will take the event as a param, and "this" refers to target
+ * @param {Object} scope the scope to execute the handler
  * @param {boolean} use_capture  defaults to false
  * @function
  */
-sc.helpers.removeListener = function(target, event_type, handler, scope, use_capture) {
+sc.helpers.removeListener = function(target, event_type, handler, use_capture) {
 
-	function scope_perserver(e) {
-		handler.call(scope, e);
-	}
+	sch.dump('removing listener for '+event_type);
+	sch.dump('on target nodeName:'+target.nodeName);
 
 	if (use_capture !== true) {
 		use_capture = false;
 	}
 	
-	if (scope) {
-		target.removeEventListener(event_type, scope_perserver, use_capture);
-	} else {
-		target.removeEventListener(event_type, handler, use_capture);
-	}
+	target.removeEventListener(event_type, handler, use_capture);
 };
 
+/**
+ * @param {DOMElement} base_target The base target where the delegated listener will be set-up
+ * @param {string} selector The CSS Selector that will be used to match incoming events. Matching is done with jQuery
+ * @param {string} event_type The event type 
+ * @param {Function} handler a method that will take the event as a param, and "this" refers to target
+ * @param {Object} [scope] the scope to execute the handler
+ * @param {Boolean} [use_capture] Describe this parameter
+ */
+sc.helpers.addDelegatedListener = function(base_target, selector, event_type, handler, scope) {
+	
+	sch.dump('listening for '+event_type);
+	sch.dump('on target nodeName:'+target.nodeName);
+	sch.dump('for selector:'+selector);
+	
+	if (use_capture !== true) {
+		use_capture = false;
+	}
+	
+	
+	
+	if (scope) {
+		
+		var __handler = _.bind(handler, scope);
+		target.addEventListener(event_type, __handler, use_capture);
+		return __handler;
+		
+	} else {
+		
+		target.addEventListener(event_type, handler, use_capture);
+		return handler;
+
+	}
+	
+};
+
+/**
+ * @param {DOMElement} base_target The base target where the delegated listener will be set-up
+ * @param {string} selector The CSS Selector that will be used to match incoming events. Matching is done with jQuery
+ * @param {string} event_type The event type 
+ * @param {Function} handler a method that will take the event as a param, and "this" refers to target
+ * @param {Object} [scope] the scope to execute the handler
+ * @param {Boolean} [use_capture] Describe this parameter
+ */
+sc.helpers.removeDelegatedListener = function(base_target, selector, event_type, handler, scope, use_capture) {
+	
+};
 
 /**
  * This triggers a custom event using document.createEvent('Events') and target.dispatchEvent()
@@ -2952,7 +4675,7 @@ sc.helpers.removeListener = function(target, event_type, handler, scope, use_cap
 sc.helpers.triggerCustomEvent = function(event_type, target, data, bubble) {
 	
 	sch.dump('triggering '+event_type);
-	sch.dump('target nodeName:'+target.nodeName);
+	sch.dump('on target nodeName:'+target.nodeName);
 	
 	if (bubble !== false) {
 		bubble = true;
@@ -2987,6 +4710,19 @@ sc.helpers.listen = sc.helpers.addListener;
  * @function
  */
 sc.helpers.unlisten = sc.helpers.removeListener;
+
+/**
+ * Alias for sc.helpers.addDelegatedListener
+ * @function 
+ */
+sc.helpers.live = sc.helpers.addDelegatedListener;
+
+/**
+ * Alias for sc.helpers.removeDelegatedListener
+ * @function 
+ */
+sc.helpers.die = sc.helpers.removeDelegatedListener;
+
 
 /**
  * Alias for sc.helpers.triggerCustomEvent 
@@ -3872,12 +5608,15 @@ sc.helpers.isArray = function(obj) {
 };
 
 /*
-	Returns a copy of the object using the jQuery.extend() method
+	Returns a copy of the object using the _.extend() method
 */
 sc.helpers.clone = function(oldObj) {
-	return jQuery.extend({}/* clone */, oldObj);
+	return _.extend({}/* clone */, oldObj);
 };
 
+/**
+ * @todo 
+ */
 sc.helpers.each = function(arr, f) {
 	
 };
@@ -3895,6 +5634,29 @@ sc.helpers.extend = function(child, supertype)
 {
    child.prototype.__proto__ = supertype.prototype;
 };
+
+/**
+ * Designed to fill in default values for an options argument passed to a
+ * function. Merges the provided defaults with the passed object, using items
+ * from defaults if they don't exist in passed 
+ * 
+ * @param {object} defaults the default key/val pairs
+ * @param {object} passed   the values provided to the calling method
+ * @returns {object} a set of key/vals that have defaults filled-in
+ */
+sc.helpers.defaults = function(defaults, passed) {
+	
+	var args = defaults;
+	
+	/* override the defaults if necessary */
+	for (var key in passed) {
+		args[key] = passed[key];
+	}
+	
+	return args;
+}
+
+
 /*jslint 
 browser: true,
 nomen: false,
@@ -3914,8 +5676,8 @@ sc.helpers.deJSON = function(json)
  {
 
 	// Fix twitter data bug
-	var re = new RegExp("Couldn\\'t\\ find\\ Status\\ with\\ ID\\=[0-9]+\\,", "g");
-	json = json.replace(re, "");
+	// var re = new RegExp("Couldn\\'t\\ find\\ Status\\ with\\ ID\\=[0-9]+\\,", "g");
+	// json = json.replace(re, "");
 
 	var done = false;
 	try {
@@ -4132,8 +5894,9 @@ var sc;
 
 /**
  * Stub 
+ * @platformstub
  */
-function getCurrentLocation() {
+sc.helpers.getCurrentLocation = function() {
 	
 }/*jslint 
 bitwise: false,
@@ -4214,13 +5977,49 @@ sc.helpers.autolink = function(str, type, extra_code, maxlen) {
 		type = 'both';
 	}
 
+	var re_nohttpurl = /((^|\s)(www\.)?([a-zA-Z_\-]+\.)(com|net|org)($|\s))/gi;
+
 	var re_noemail = /(^|\s|\(|:)((http(s?):\/\/)|(www\.))(\w+[^\s\)<]+)/gi;
 	var re_nourl   = /(^|\s|\()([a-zA-Z0-9_\.\-\+]+)@([a-zA-Z0-9\-]+)\.([a-zA-Z0-9\-\.]*)([^\s\)<]+)/gi;
 	
 	var x, ms, period = '';
 
 	if (type !== 'email')
-	{
+	{	
+		while ((ms = re_nohttpurl.exec(str))) { // look for URLs without a preceding "http://"
+			// if ( /\.$/.test(ms[4]) ) {
+			// 	period = '.';
+			//	ms[5] = ms[5].slice(0, -1);
+			// }
+			
+			/*
+				sometimes we can end up with a null instead of a blank string,
+				so we need to force the issue in javascript.
+			*/
+			for (x=0; x<ms.length; x++) {
+				if (!ms[x]) {
+					ms[x] = '';
+				}
+			}
+
+			if (extra_code) {
+				extra_code = ' '+extra_code;
+			} else {
+				extra_code = '';
+			}
+			
+			var desc = ms[3]+ms[4]+ms[5];
+
+			if (maxlen && maxlen > 0 && desc.length > maxlen) {
+				desc = desc.substr(0, maxlen)+'...';
+			}
+
+			var newstr = ms[2]+'<a href="http://'+ms[3]+ms[4]+ms[5]+'"'+extra_code+'>'+desc+'</a>'+ms[6];
+			sch.error(newstr);
+			str = str.replace(ms[0], newstr);
+		}
+		
+		
 		while ((ms = re_noemail.exec(str))) {
 
 			if ( /\.$/.test(ms[6]) ) {
@@ -4774,6 +6573,20 @@ sc.helpers.ltrim = function (str, chars) {
 sc.helpers.rtrim = function (str, chars) {
 	chars = chars || "\\s";
 	return str.replace(new RegExp("[" + chars + "]+$", "g"), "");
+};
+
+
+/**
+ * @param {string} str the string in which we're converting linebreaks
+ * @param {string} [breaktag] the tag used to break up lines. defaults to <br>
+ * @returns {string} the string with linebreaks converted to breaktags
+ */
+sc.helpers.nl2br = function(str, breaktag) {
+	
+	breaktag = breaktag || '<br>';
+	
+	str = str.replace(/(\r\n|\n\r|\r|\n)/g, breaktag+'$1');
+	return str;
 };/*jslint 
 browser: true,
 nomen: false,
@@ -4797,6 +6610,13 @@ var SPAZCORE_PLATFORM_AIR			= 'AIR';
 var SPAZCORE_PLATFORM_WEBOS		= 'webOS';
 var SPAZCORE_PLATFORM_TITANIUM	= 'Titanium';
 var SPAZCORE_PLATFORM_UNKNOWN		= '__UNKNOWN';
+
+
+var SPAZCORE_OS_WINDOWS		= 'Windows';
+var SPAZCORE_OS_LINUX		= 'Linux';
+var SPAZCORE_OS_MACOS		= 'MacOS';
+var SPAZCORE_OS_UNKNOWN		= '__OS_UNKNOWN';
+
 
 /**
  * error reporting levels 
@@ -4862,6 +6682,7 @@ sc.helpers.isTitanium = function() {
 };
 
 
+
 /**
  * Helper to send a debug dump 
  */
@@ -4880,7 +6701,7 @@ sc.helpers.note = function(obj) {
  * helper to send a warn dump 
  */
 sc.helpers.warn = function(obj) {
-	sc.helpers.dump(obj, SPAZCORE_DUMPLEVEL_WARN);
+	sc.helpers.dump(obj, SPAZCORE_DUMPLEVEL_WARNING);
 };
 
 /**
@@ -4896,7 +6717,7 @@ sc.helpers.error = function(obj) {
  * @platformstub
  */
 sc.helpers.dump = function(obj, level) {
-	// stub
+	console.log(obj);
 };
 
 /**
@@ -4904,7 +6725,7 @@ sc.helpers.dump = function(obj, level) {
  * @platformstub
  */
 sc.helpers.openInBrowser = function(url) {
-	// stub
+	window.open(url);
 };
 
 /**
@@ -4979,7 +6800,7 @@ sc.helpers.getEncryptedValue = function(key) {
  * Sets a value in the EncryptedLocalStore of AIR
  * @platformstub
  */
-sc.helpers.setEncyrptedValue = function(key, val) {
+sc.helpers.setEncryptedValue = function(key, val) {
 	// stub
 };
 
@@ -5009,6 +6830,43 @@ sc.helpers.getPreferencesFile = function(name, create) {
 */
 sc.helpers.init_file = function(path, overwrite) {
 	// stub
+};
+
+
+/**
+* Returns a string identifier for the OS.
+* 
+* @return {String} an identifier for the OS.  See the SPAZCORE_OS_* variables
+*/
+sc.helpers.getOS = function() {
+	// stub
+	return SPAZCORE_OS_UNKNOWN;
+};
+
+/**
+* checks to see if current platform is the one passed in. Use one of the defined constants, like SPAZCORE_OS_WINDOWS
+* 
+* @param {String} str the platform you're checking for
+* 
+*/
+sc.helpers.isOS = function(str) {
+	var type = sc.helpers.getOS();
+	if (type === str) {
+		return true;
+	}
+	return false;
+}
+
+sc.helpers.isWindows = function() {
+	return sc.helpers.isOS(SPAZCORE_OS_WINDOWS)
+};
+
+sc.helpers.isLinux = function() {
+	return sc.helpers.isOS(SPAZCORE_OS_LINUX)
+};
+
+sc.helpers.isMacOS = function() {
+	return sc.helpers.isOS(SPAZCORE_OS_MACOS)
 };
 /*jslint 
 browser: true,
@@ -5048,6 +6906,12 @@ sc.helpers.removeExtraElements = function(item_selector, max_items, remove_from_
 	var parent = jqitems.parent().get(0);
 
 	var diff = jqitems.length - max_items;
+	
+	sch.debug('removing extra elements from '+item_selector);
+	sch.debug('matching item count '+jqitems.length);
+	sch.debug('max_items: '+max_items);
+	sch.debug('diff: '+diff);
+	sch.debug('remove_from_top: '+remove_from_top);
 
 	if (diff > 0) {
 
@@ -5117,7 +6981,12 @@ white: false,
 onevar: false 
  */
 var sc, DOMParser;
- 
+
+/**
+ * Given a string, this returns an XMLDocument
+ * @param {string} string
+ * @return {XMLDocument}
+ */
 sc.helpers.createXMLFromString = function (string) {
 	var xmlParser, xmlDocument;
 	try {
@@ -5131,7 +7000,331 @@ sc.helpers.createXMLFromString = function (string) {
 };
 
 
+
 /**
+ * "constants" for account types 
+ */
+var SPAZCORE_ACCOUNT_TWITTER	= 'twitter';
+var SPAZCORE_ACCOUNT_IDENTICA	= 'identi.ca';
+var SPAZCORE_ACCOUNT_STATUSNET	= 'StatusNet';
+var SPAZCORE_ACCOUNT_FLICKR		= 'flickr';
+var SPAZCORE_ACCOUNT_WORDPRESS	= 'wordpress.com';
+var SPAZCORE_ACCOUNT_TUMBLR		= 'tumblr';
+var SPAZCORE_ACCOUNT_FACEBOOK	= 'facebook';
+var SPAZCORE_ACCOUNT_FRIENDFEED	= 'friendfeed';
+
+/**
+ * This creates a new SpazAccounts object, and optionally associates it with an existing preferences object
+ * @constructor
+ * @param (Object) prefsObj  An existing SpazPrefs object (optional)
+ */
+var SpazAccounts = function(prefsObj) {
+	if (prefsObj) {
+		this.prefs = prefsObj;
+	} else {
+		this.prefs = new SpazPrefs();
+		this.prefs.load();
+	}
+	
+	/*
+		load existing accounts
+	*/
+	this.load();
+
+};
+
+/**
+ * the key used inside the prefs object 
+ */
+SpazAccounts.prototype.prefskey = 'users';
+
+/**
+ * loads the accounts array from the prefs object 
+ */
+SpazAccounts.prototype.load	= function() { 
+	var accjson = this.prefs.get(this.prefskey);
+	
+	sch.debug("accjson:'"+accjson+"'");
+	
+	try {
+		this._accounts = sch.deJSON(this.prefs.get(this.prefskey));
+	} catch(e) {
+		sch.error(e.message);
+		this._accounts = [];
+	}		
+
+	/*
+		sanity check
+	*/
+	if (!sch.isArray(this._accounts)) {
+		this._accounts = [];
+	}
+	
+	sch.debug("this._accounts:'"+this._accounts+"'")
+	
+};
+
+/**
+ * saves the accounts array to the prefs obj 
+ */
+SpazAccounts.prototype.save	= function() {
+	
+	
+	this.prefs.set(this.prefskey, sch.enJSON(this._accounts));
+	sch.debug('saved users to "'+this.prefskey+'" pref');
+	for (var x in this._accounts) {
+		sch.debug(this._accounts[x].id);
+	};
+	
+	sch.debug('THE ACCOUNTS:')
+	sch.debug(sch.enJSON(this._accounts));
+
+	sch.debug('ALL PREFS:')
+	sch.debug(sch.enJSON(this.prefs._prefs));
+
+	
+};
+
+/**
+ * returns the array of accounts
+ * @returns {array} the accounts 
+ */
+SpazAccounts.prototype.getAll = function() {
+	return this._accounts;
+};
+
+/**
+ * Set all users by passing in a hash. overwrites all existing data!
+ * @param {array} accounts_array an array of account objects
+ */
+SpazAccounts.prototype.setAll = function(accounts_array) {
+	this._accounts = accounts_array;
+	this.save();
+	sch.debug("Saved these accounts:");
+	for (var i=0; i < this_accounts.length; i++) {
+		sch.debug(this._accounts[x].id);
+	};
+};
+
+/**
+ * @param {string} id the UUID to update
+ * @param {object} acctobj
+ * @param {string} [acctobj.username] a new username
+ * @param {string} [acctobj.password] a new password
+ * @param {string} [acctobj.type] a new account type
+ * @param {object} [acctobj.meta] the hash of metadata; you should probably use SpazAccounts.setMeta() instead
+ */
+SpazAccounts.prototype.update = function(id, acctobj) {
+	var orig = this.get(id);
+	if (orig) {
+		var modified = sch.defaults(orig, acctobj);
+		return this.get(id);
+	} else {
+		sch.error('No account with id "'+id+'" exists');
+		return null;
+	}
+}
+
+
+
+/**
+ * wipes the accounts array and saves it
+ */
+SpazAccounts.prototype.initAccounts	= function() {
+	this._accounts = [];
+	this.save();
+};
+
+/**
+ * add a new account
+ * @param {string} username the username
+ * @param {string} password the password
+ * @param {type} type the type of account
+ * @returns {object} the account object just added
+ */
+SpazAccounts.prototype.add = function(username, password, type) {
+	
+	if (!type) {
+		sch.error("Type must be set");
+		return false;
+	}
+	
+	var username = username.toLowerCase();
+	var id = this.generateID();
+	this._accounts.push({
+		'id':id,
+		'username':username,
+		'password':password,
+		'type':type,
+		'meta':{}
+	});
+	this.save();
+	
+	sch.debug("Added new user:"+id);
+	
+	return this.get(id);
+};
+
+
+/**
+ * @param {string} id the UUID of the account to delete 
+ */
+SpazAccounts.prototype.remove = function(id) {
+	sch.debug("Deleting '"+id+"'…");
+	
+	var index = this._findUserIndex(id);
+	if (index !== false) {
+		var deleted = this._accounts.splice(index, 1);
+		sch.debug("Deleted account '"+deleted[0].id+"'");
+		return deleted[0];
+	} else {
+		sch.error("Could not find this id to delete: '"+id+"'");
+		return false;
+	}
+};
+
+
+/**
+ * @param {string} type the type of accounts to retrieve
+ * @returns {array} the array of matching accounts
+ */
+SpazAccounts.prototype.getByType = function(type) {
+	var matches = [];
+	
+	for (var i=0; i < this._accounts.length; i++) {
+		if (this._accounts[i].type === type) {
+			matches.push(this._accounts[i])
+		}
+	};
+	
+	return matches;
+};
+
+/**
+ * @param {string} username the username to search for
+ * @returns {array} an array of matching accounts
+ */
+SpazAccounts.prototype.getByUsername = function(username) {
+	var matches = [];
+
+	for (var i=0; i < this._accounts.length; i++) {
+		if (this._accounts[i].username === username) {
+			matches.push(this._accounts[i])
+		}
+	};
+	
+	return matches;
+};
+
+/**
+ * @param {string} username the username to search for
+ * @param {string} type the type to search for
+ * @returns {array} an array of matching accounts
+ */
+SpazAccounts.prototype.getByUsernameAndType = function(username, type) {
+	var matches = [];
+
+	for (var i=0; i < this._accounts.length; i++) {
+		if (this._accounts[i].username === username && this._accounts[i].type === type) {
+			matches.push(this._accounts[i])
+		}
+	};
+	
+	return matches;
+	
+};
+
+
+/**
+ * retrives the user object by user and type
+ * @param {string} id  the user id UUID
+ * @param {string} type 
+ */
+SpazAccounts.prototype.get = function(id) {
+
+	var index = this._findUserIndex(id);
+
+	if (index !== false) {
+		return this._accounts[i];		
+	}
+	
+	return false;
+	
+};
+
+
+/**
+ * a private function to find the user's array index by their UUID
+ * @param {string} id the user's UUID
+ * @returns {number|boolen} returns the array index or false if DNE 
+ */
+SpazAccounts.prototype._findUserIndex = function(id) {
+	
+	for (i=0; i<this._accounts.length; i++) {
+		
+		if (this._accounts[i].id === id) {
+			sch.debug('Found matching user record to '+ id);
+			return i;
+		}
+		
+	}
+	
+	return false;
+};
+
+
+
+/**
+ * @returns {string} returns the generated UUID 
+ */
+SpazAccounts.prototype.generateID = function() {
+	var id = sc.helpers.UUID();
+	return id;
+};
+
+
+
+/**
+ * @param {string} id the user's UUID
+ * @param {string} key the key for the metadata entry
+ * @returns {String|Object|Array|Boolean|Number} returns the set value, or null if user ID or meta entry is not found
+ */
+SpazAccounts.prototype.getMeta = function(id, key) {
+	
+	if ( user = this.get(id) ) {
+		if (user.meta && user.meta[key] !== null) {
+			return user.meta[key];
+		}
+	}
+	
+	return null;
+	
+};
+
+/**
+ * @param {string} id the user's UUID
+ * @param {string} key the key for the metadata entry
+ * @param {String|Object|Array|Boolean|Number} value the value of the metadata entry
+ * @returns {String|Object|Array|Boolean|Number} returns the set value, or null if user ID is not found
+ */
+SpazAccounts.prototype.setMeta = function(id, key, value) {
+	
+	var index = this._findUserIndex(id);
+
+	if (index !== false) {		
+		if (!this._accounts[index].meta) {
+			this._accounts[index].meta = {};
+		}
+		this._accounts[index].meta[key] = value;
+		
+		this.save();
+		
+		return this._accounts[index].meta[key];
+		
+	}
+	return null;
+	
+};/**
  * a library to get direct image urls for various image hosting servces 
  */
 function SpazImageURL(args) {
@@ -5190,7 +7383,7 @@ SpazImageURL.prototype.initAPIs = function() {
 		'url_regex'       : /http:\/\/(?:pikchur\.com|pk\.gd)\/([a-zA-Z0-9]+)/gi,
 		'getThumbnailUrl' : function(id) {
 			// http://img.pikchur.com/pic_GPT_t.jpg
-			var url = 'http://img.pikchur.com/pic_'+id+'_m.jpg';
+			var url = 'http://img.pikchur.com/pic_'+id+'_s.jpg';
 			return url;
 		},
 		'getImageUrl'     : function(id) {
@@ -5301,6 +7494,7 @@ SpazImageURL.prototype.findServiceUrlsInString = function(str) {
  * find the image service URLs that work with our defined APIs in a given string
  * @param {object} matches
  * @return {object|null} fullurl:thumburl key:val pairs
+ * 
  */
 SpazImageURL.prototype.getThumbsForMatches = function(matches) {
 	var x, service, api, thumburl, thumburls = {}, num_urls = 0;
@@ -5339,6 +7533,20 @@ SpazImageURL.prototype.getThumbsForUrls = function(str) {
 		return null;
 	}
 	
+};
+
+/**
+ * given a single image hosting service URL, this returns a URL to the thumbnail image itself
+ * @param {string} url
+ * @return {string|null}
+ */
+SpazImageURL.prototype.getThumbForUrl = function(url) {
+	var urls = this.getThumbsForUrls(url);
+	if (urls) {
+		return urls[url];
+	} else {
+		return null;
+	}
 };
 
 
@@ -5400,6 +7608,421 @@ SpazImageURL.prototype.getImageForUrl = function(url) {
 		return null;
 	}
 };
+/*jslint 
+browser: true,
+nomen: false,
+debug: true,
+forin: true,
+undef: true,
+white: false,
+onevar: false 
+ */
+var sc, DOMParser, jQuery;
+
+
+/**
+ * A file uploader class for SpazCore 
+ */
+
+/**
+ * Events used by this library 
+ */
+if (!sc.events) { sc.events = {}; }
+sc.events.fileUploadStart	= 'fileUploadStart';
+sc.events.fileUploadSuccess	= 'fileUploadSuccess';
+sc.events.fileUploadFailure	= 'fileUploadFailure';
+
+
+
+/**
+ * Constructor
+ * 
+ * opts = {
+ *   api:'',
+ *   startEvent:'',
+ *   successEvent:'',
+ *   failureEvent:'',
+ *   eventTarget:DOMElement
+ * } 
+ */
+function SpazFileUploader(opts) {
+
+	if (!opts) { opts = {}; }
+		
+	if (opts.api) {
+		this.setAPI(opts.api);
+	}
+	this.startEvent   = opts.startEvent   || sc.events.fileUploadStart;
+	this.successEvent = opts.successEvent || sc.events.fileUploadSuccess;
+	this.failureEvent = opts.failureEvent || sc.events.fileUploadFailure;
+	this.eventTarget  = opts.eventTarget  || document;
+	
+	this.apis = this.getAPIs();
+
+}
+
+/**
+ * returns an array of API labels
+ * @return array 
+ */
+SpazFileUploader.prototype.getAPILabels = function() {
+	var labels = [];
+	for ( var key in this.getAPIs() ) {
+		labels.push(key);
+	}
+	return labels;
+};
+
+
+/**
+ * This builds the apis hash and returns it. All API stuff is defined inside here
+ */
+SpazFileUploader.prototype.getAPIs = function() {
+
+	var thisSFU = this;
+
+	var apis = {
+		'pikchur' : {
+		    'upload_url' : 'http://api.pikchur.com/simple/upload',
+		    'post_url' : 'http://api.pikchur.com/simple/uploadAndPost',
+			'api_key_field': 'api_key', // setting this to non-empty means we MUST set an api key
+			'processResult': function(event, apiobj) {
+				var loader = event.target;
+				
+				var returnobj = {}
+
+				var parser=new DOMParser();
+				var xmldoc = parser.parseFromString(loader.data,"text/xml");
+
+				var rspAttr = xmldoc.getElementsByTagName("rsp")[0].attributes;
+				if (rspAttr.getNamedItem("stat").nodeValue === 'ok')
+				{
+					returnobj['mediaurl'] = jQuery(xmldoc).find('mediaurl').text();
+				} 
+				else
+				{
+					returnobj['errAttributes'] = xmldoc.getElementsByTagName("err")[0].attributes;
+					returnobj['errMsg'] = errAttributes.getNamedItem("msg").nodeValue;
+				}
+				sch.debug(returnobj);
+				return returnobj;
+			}
+		},
+		'yfrog' : {
+		    'upload_url' : 'http://yfrog.com/api/upload',
+		    'post_url' : 'http://yfrog.com/api/uploadAndPost',
+			'processResult': function(event, apiobj) {
+				var loader = event.target;
+
+				var parser=new DOMParser();
+				var xmldoc = parser.parseFromString(loader.data,"text/xml");
+
+				var rspAttr = xmldoc.getElementsByTagName("rsp")[0].attributes;
+				if (rspAttr.getNamedItem("stat").nodeValue === 'ok')
+				{
+					returnobj['mediaurl'] = jQuery(xmldoc).find('mediaurl').text();
+				} 
+				else
+				{
+					returnobj['errAttributes'] = xmldoc.getElementsByTagName("err")[0].attributes;
+					returnobj['errMsg'] = errAttributes.getNamedItem("msg").nodeValue;
+				}
+				sch.debug(returnobj);
+				return returnobj;
+			}
+		},
+	    'twitpic' : {
+			'upload_url' : 'http://twitpic.com/api/upload',
+		    'post_url'   : 'http://twitpic.com/api/uploadAndPost',
+			'processResult': function(event, apiobj) {
+				var loader = event.target;
+				
+				sch.debug('PROCESSING: EVENT');
+				sch.debug(event);
+
+				var parser=new DOMParser();
+				var xmldoc = parser.parseFromString(event.data,"text/xml");
+
+				var rspAttr = xmldoc.getElementsByTagName("rsp")[0].attributes;
+				if (rspAttr.getNamedItem("stat").nodeValue === 'ok')
+				{
+					returnobj['mediaurl'] = jQuery(xmldoc).find('mediaurl').text();
+				} 
+				else
+				{
+					returnobj['errAttributes'] = xmldoc.getElementsByTagName("err")[0].attributes;
+					returnobj['errMsg'] = errAttributes.getNamedItem("msg").nodeValue;
+				}
+				sch.debug(returnobj);
+				return returnobj;
+			}
+		},
+	    'posterous' : {
+			'upload_url' : 'http://posterous.com/api/upload',
+		    'post_url'   : 'http://posterous.com/api/uploadAndPost',
+			'processResult': function(event, apiobj) {
+				var loader = event.target;
+				
+				sch.debug('PROCESSING: EVENT');
+				sch.debug(event);
+
+				var parser=new DOMParser();
+				var xmldoc = parser.parseFromString(event.data,"text/xml");
+
+				var rspAttr = xmldoc.getElementsByTagName("rsp")[0].attributes;
+				if (rspAttr.getNamedItem("stat").nodeValue === 'ok')
+				{
+					returnobj['mediaurl'] = jQuery(xmldoc).find('mediaurl').text();
+				} 
+				else
+				{
+					returnobj['errAttributes'] = xmldoc.getElementsByTagName("err")[0].attributes;
+					returnobj['errMsg'] = errAttributes.getNamedItem("msg").nodeValue;
+				}
+				sch.debug(returnobj);
+				return returnobj;
+			}
+		},
+		'twitgoo' : {
+			'upload_url' : 'http://twitgoo.com/api/upload',
+			'post_url'   : 'http://twitgoo.com/api/uploadAndPost',
+			'processResult': function(event, apiobj) {
+				var loader = event.target;
+
+				var parser=new DOMParser();
+				var xmldoc = parser.parseFromString(loader.data,"text/xml");
+
+				var rspAttr = xmldoc.getElementsByTagName("rsp")[0].attributes;
+				if (rspAttr.getNamedItem("stat").nodeValue === 'ok')
+				{
+					returnobj['mediaurl'] = jQuery(xmldoc).find('mediaurl').text();
+				} 
+				else
+				{
+					returnobj['errAttributes'] = xmldoc.getElementsByTagName("err")[0].attributes;
+					returnobj['errMsg'] = errAttributes.getNamedItem("msg").nodeValue;
+				}
+				sch.debug(returnobj);
+				return returnobj;
+			}
+		}//,
+		/*
+			Not sure if we should continue to support tweetphoto; API is complex
+		*/
+		// 'tweetphoto': {
+		// 	'upload_url' : 'http://tweetphotoapi.com/api/tpapi.svc/upload2',
+		// 	'api_key_field': 'TPAPIKEY', // this means we need to set the api key
+		// 	'onBeforeSend' : function(extraParams, api.upload_url, file_url) {
+		// 	
+		// 	},
+		// 	'processResult': function(event, apiobj) {
+		// 		var loader = event.target;
+		// 
+		// 		var parser=new DOMParser();
+		// 		var xmldoc = parser.parseFromString(loader.data,"text/xml");
+		// 
+		// 		if (jQuery(xmldoc).find('Status').text().toLowerCase() === 'ok')
+		// 		{
+		// 			var mediaurl = jQuery(xmldoc).find('MediaUrl').text();
+		// 		} 
+		// 		else
+		// 		{
+		// 			sch.error('There was an error uploading to TweetPhoto')
+		// 			var errAttributes = xmldoc.getElementsByTagName("err")[0].attributes;
+		// 			var errMsg = errAttributes.getNamedItem("msg").nodeValue;
+		// 		}
+		// 	}	
+		// }
+		
+	};
+
+	return apis;
+
+};
+
+/**
+ * Pass the api you want to use as a string
+ * @param {string} apilabel 
+ */
+SpazFileUploader.prototype.setAPI = function(apilabel) {
+	this.api = this.apis[apilabel];
+};
+
+/**
+ * some services require an api key or app identifier. This sets that.
+ * @param {string} api_key
+ */
+SpazFileUploader.prototype.setAPIKey = function(api_key) {
+	if (this.api) {
+		this.api.api_key = api_key;
+	} else {
+		sch.error('Must set the API before setting API key');
+	}
+};
+
+/**
+ * some services require an api key or app identifier. This sets that.
+ * @param {string} api_key
+ */
+SpazFileUploader.prototype.getAPIKey = function() {
+	if (this.api) {
+		return this.api.api_key;
+	} else {
+		sch.error('Must set the API before getting API key');
+	}
+};
+
+/**
+ * opts = {
+ *   'api':'', // use if not set already
+ *   'username':'xxx',
+ *   'password':'xxx',
+ *   'source':'xxx',
+ *   'message':''
+ *   
+ * } 
+ * 
+ * This uploads a file located at the given file_url. It uses the
+ * sc.helpers.HTTPUploadFile as defined for your given platform.  Events are
+ * raised as set in the constructor on start, success and failure.
+ * 
+ * Note that in the webOS implementation, success events are raised every time
+ * progress is reported, NOT just when completion happens. Check for the
+ * "completed" boolean property in the response object. This may change in the
+ * future.
+ * 
+ * @param {string} post_url  the url we're uploading the file to
+ * @param {string} file_url  the local url of the file we're uploading
+ * @param {object} opts  a set of key/val pairs
+ */
+SpazFileUploader.prototype.uploadFile = function(post_url, file_url, opts) {
+
+	var api, api_key;
+
+	var thisSFU = this;
+
+	if (opts.api) {
+		api = this.apis.api;
+	} else if (this.api) {
+		api = this.api;
+	} else {
+		sch.error('Must set the API before uploading');
+		return;
+	}
+	
+	var username = opts.username || null;
+	var password = opts.password || null;
+	var source   = opts.source   || null;
+	var message  = opts.message  || null;
+	
+	/*
+		platform opts are for platform-specific options. For now we're using
+		this because webOS requires the scene controller to call the service
+		request, so we pass a reference to the scene assistant
+	*/
+	var platformOpts = opts.platform || null;
+
+	var onStart = opts.onStart || null;
+
+	var extraParams = {
+		"username": username,
+		"password": password,
+		"source":   source,
+		"message":  message
+	};
+	
+	/**
+	 * if we have an API key field, then we need the api key 
+	 */
+	if ( (api.api_key_field) ) {
+		extraParams[api.api_key_field] = this.getAPIKey();
+	}
+
+	/*
+		A callback in case we need to massage the data before upload
+	*/
+	if (api.onBeforeSend) {
+		api.onBeforeSend.call(api, extraParams, api.upload_url, file_url);
+	}
+	
+	/*
+		trigger upload start event
+	*/
+	sc.helpers.triggerCustomEvent(thisSFU.startEvent, thisSFU.eventTarget);
+	
+	// upload the file
+	sc.helpers.HTTPUploadFile({
+			'extra'   : extraParams,
+			'url'     : post_url,
+			'file_url': file_url,
+			'platform': platformOpts
+		},
+		function(event) {
+			sch.debug('UPLOAD SUCCESS, PROCESSING');
+			/*
+				For now we're not using the processResult methods, as the 
+				implementation can vary by platform. For now, process response
+				externally.
+			*/
+			// var data = api.processResult.call(thisSFU, event, api);
+			// sch.debug(data);
+			sc.helpers.triggerCustomEvent(thisSFU.successEvent, thisSFU.eventTarget, event);
+		},
+		function(event) {
+			sch.debug('UPLOAD FAILURE, PROCESSING');
+			/*
+				For now we're not using the processResult methods, as the 
+				implementation can vary by platform. For now, process response
+				externally.
+			*/
+			// var data = api.processResult.call(thisSFU, event, api);
+			// sch.debug(data);
+			sc.helpers.triggerCustomEvent(thisSFU.failureEvent, thisSFU.eventTarget, event);
+		}
+	);
+};
+
+
+
+/**
+ * a wrapper for uploadFile that uses the post_url from the API definition 
+ */
+SpazFileUploader.prototype.uploadAndPost = function(file_url, opts) {
+	var api;
+	
+	if (opts.api) {
+		api = this.apis.api;
+	} else if (this.api) {
+		api = this.api;
+	} else {
+		sch.error('Must set the API before uploading');
+		return;
+	}
+	
+	this.uploadFile(api.post_url, file_url, opts);
+	
+};
+
+/**
+ * a wrapper for uploadFile that uses the upload_url from the API definition 
+ */
+SpazFileUploader.prototype.upload = function(file_url, opts) {
+	
+	var api;
+	
+	if (opts.api) {
+		api = this.apis.api;
+	} else if (this.api) {
+		api = this.api;
+	} else {
+		sch.error('Must set the API before uploading');
+		return;
+	}
+	
+	this.uploadFile(api.upload_url, file_url, opts);
+	
+};
+
 /*jslint 
 browser: true,
 nomen: false,
@@ -5578,6 +8201,10 @@ onevar: false
 var sc, Titanium, air, window, jQuery, Mojo;
 
 var SPAZCORE_PREFS_TI_KEY = 'preferences_json';
+
+var SPAZCORE_PREFS_AIR_FILENAME = 'preferences.json';
+
+var SPAZCORE_PREFS_MOJO_COOKIENAME = 'preferences.json';
  
 /**
  * A preferences lib for AIR JS apps. This requires the json2.js library
@@ -5591,12 +8218,12 @@ var SPAZCORE_PREFS_TI_KEY = 'preferences_json';
  * @param {object} sanity_methods a JS object of key:object pairs that defines methods to be called when the pref is get() or set(). Example:
  * {
  * 	foo:{
- * 		onGet:function() {};
- * 		onSet:function() {};
+ * 		onGet:function(key, value) {};
+ * 		onSet:function(key, value) {};
  * 	},
  * 	bar:{
- * 		onGet:function() {};
- * 		onSet:function() {};
+ * 		onGet:function(key, value) {};
+ * 		onSet:function(key, value) {};
  * 	}
  * }
  * 
@@ -5606,7 +8233,7 @@ var SPAZCORE_PREFS_TI_KEY = 'preferences_json';
  * @TODO we need to pull out the platform-specifc stuff into the /platforms/... hierarchy
  * @class SpazPrefs
  */
-function SpazPrefs(defaults, sanity_methods) {	
+function SpazPrefs(defaults, id, sanity_methods) {	
 
 	/*
 		init prefs
@@ -5623,7 +8250,12 @@ function SpazPrefs(defaults, sanity_methods) {
 
 
 	if (sanity_methods) {
-		sc.helpers.dump('need to add sanity_method parsing');
+		sch.debug('adding sanity methods to prefs');
+		this._sanity_methods = sanity_methods;
+	}
+	
+	if (id) {
+		this.id = id;
 	}
 	
 	if (defaults) {
@@ -5651,13 +8283,8 @@ SpazPrefs.prototype.setDefaults = function(defaults) {
 SpazPrefs.prototype._applyDefaults = function() {
 	var key;
 	for (key in this._defaults) {
-		sc.helpers.dump('Copying default "' + key + '":"' + this._defaults[key] + '" (' + typeof(this._defaults[key]) + ')');
+		sc.helpers.debug('Copying default "' + key + '":"' + this._defaults[key] + '" (' + typeof(this._defaults[key]) + ')');
 		this._prefs[key] = this._defaults[key];
-
-		if (this._sanity_methods[key] && this._sanity_methods[key].onSet) {
-			sc.helpers.dump("Calling "+key+".onSet()");
-			this._sanity_methods[key].onSet();
-		}
 	}
 };
 
@@ -5677,18 +8304,33 @@ SpazPrefs.prototype.resetPrefs = function() {
  * Note that FALSE is returned if the key does not exist
  */
 SpazPrefs.prototype.get = function(key, encrypted) {
+	var value;
+	
+	// if (this._sanity_methods[key] && this._sanity_methods[key].onSet) {
+	// 	sc.helpers.debug("Calling "+key+".onSet()");
+	// 	this._sanity_methods[key].onSet();
+	// }
+	
+	
 	if (encrypted) {
-		return this.getEncrypted(key);
-	} 
-	
-	sc.helpers.dump('Looking for pref "'+key+'"');
-	
-	if (this._prefs[key]) {
-		sc.helpers.dump('Found pref "'+key+'" of value "'+this._prefs[key]+'" ('+typeof(this._prefs[key])+')');
-		return this._prefs[key];
+		value = this.getEncrypted(key);
 	} else {
-		return false;
+		sc.helpers.debug('Looking for pref "'+key+'"');
+
+		if (this._prefs[key]) {
+			sc.helpers.debug('Found pref "'+key+'" of value "'+this._prefs[key]+'" ('+typeof(this._prefs[key])+')');
+			value = this._prefs[key];
+		} else {
+			value = false;
+		}
 	}
+	
+	if (this._sanity_methods[key] && this._sanity_methods[key].onGet) {
+		sc.helpers.debug("Calling "+key+".onGet()");
+		value = this._sanity_methods[key].onGet.call(this, key, value);
+	}
+		
+	return value;
 };
 
 
@@ -5697,13 +8339,20 @@ SpazPrefs.prototype.get = function(key, encrypted) {
  */
 SpazPrefs.prototype.set = function(key, val, encrypted) {
 	
-	sc.helpers.dump('Setting and saving "'+key+'" to "'+val+'" ('+typeof(val)+')');
+	sc.helpers.debug('Setting and saving "'+key+'" to "'+val+'" ('+typeof(val)+')');
+	
+	if (this._sanity_methods[key] && this._sanity_methods[key].onSet) {
+		sc.helpers.debug("Calling "+key+".onSet()");
+		val = this._sanity_methods[key].onSet.call(this, key, val);
+	}
 	
 	if (encrypted) {
-		return this.setEncrypted(key, val);
-	} 
+		this.setEncrypted(key, val);
+	} else {
+		this._prefs[key] = val;
+	}
 
-	this._prefs[key] = val;
+	
 	
 	this.save();
 };
@@ -5722,7 +8371,7 @@ SpazPrefs.prototype.set = function(key, val, encrypted) {
 SpazPrefs.prototype.setSanityMethod = function(key, type, method) {
 	
 	if (type !== 'onGet' && type !== 'onSet') {
-		return false;
+		sch.error('sanity method type must be onGet or onSet');
 	}
 	
 	this._sanity_methods[key][type] = method;
@@ -5751,111 +8400,13 @@ SpazPrefs.prototype.setEncrypted = function(key, val) {
 /**
  * loads the prefs file and parses the prefs into this._prefs,
  * or initializes the file and loads the defaults
- * @todo
+ * @stub
  */
 SpazPrefs.prototype.load = function(name) {
-	
-	var thisPrefs = this;
-	
-	/*
-		webOS implementation
-	*/
-	if (sc.helpers.iswebOS()) {
-
-		sc.helpers.dump('this is webOS');
-		if (!this.mojoCookie) {
-			sc.helpers.dump('making cookie');
-			this.mojoCookie = new Mojo.Model.Cookie('SpazPrefs');
-			
-			
-			
-		}
-		var loaded_prefs = this.mojoCookie.get();
-		if (loaded_prefs) {
-			sc.helpers.dump('Prefs loaded');
-			for (var key in loaded_prefs) {
-				//sc.helpers.dump('Copying loaded pref "' + key + '":"' + thisPrefs._prefs[key] + '" (' + typeof(thisPrefs._prefs[key]) + ')');
-	            thisPrefs._prefs[key] = loaded_prefs[key];
-	       	}
-			jQuery().trigger('spazprefs_loaded');
-		} else {
-			sc.helpers.dump('Prefs loading failed in onGet');
-			this.migrateFromMojoDepot();
-			// thisPrefs.resetPrefs();
-		}
-		
-
-		
-
-	}
-	
-	/*
-		Titanium implementation
-		@TODO
-	*/
-	if (sc.helpers.isTitanium()) {
-		if (Titanium.App.Properties.hasProperty(SPAZCORE_PREFS_TI_KEY)) {
-			var prefs_json = Titanium.App.Properties.getString(SPAZCORE_PREFS_TI_KEY);
-			var loaded_prefs = sc.helpers.deJSON(prefs_json);
-			for (var key in loaded_prefs) {
-				sc.helpers.dump('Copying loaded pref "' + key + '":"' + this._prefs[key] + '" (' + typeof(this._prefs[key]) + ')');
-	            this._prefs[key] = loaded_prefs[key];
-	       	}
-		} else {
-			// save the defaults if this is the first time
-			this.save();
-		}
-		jQuery().trigger('spazprefs_loaded');
-	}
-	
 };
 
 
-/**
- * We used to store the data in a Depot, so we may need
- * to migrate data out of there 
- */
-SpazPrefs.prototype.migrateFromMojoDepot = function() {
-	
-	var thisPrefs = this;
-	
-	sch.error('MIGRATING FROM DEPOT! ============================ ');
-	
-	sc.helpers.dump('this is webOS');
-	if (!this.mojoDepot) {
-		sc.helpers.dump('making depot');
-		this.mojoDepot = new Mojo.Depot({
-			name:'SpazDepotPrefs',
-			replace:false
-		});
-	}
-	
-	var onGet = function(loaded_prefs) {
-		if (loaded_prefs) {
-			sc.helpers.dump('Prefs loaded');
-			for (var key in loaded_prefs) {
-				//sc.helpers.dump('Copying loaded pref "' + key + '":"' + thisPrefs._prefs[key] + '" (' + typeof(thisPrefs._prefs[key]) + ')');
-	            thisPrefs._prefs[key] = loaded_prefs[key];
-	       	}
-		} else {
-			sc.helpers.dump('Prefs loading failed in onGet');
-			thisPrefs.resetPrefs();
-		}
-		thisPrefs.save(); // write to cookie
-		jQuery().trigger('spazprefs_loaded');
-	};
 
-	var onFail = function() {
-		sc.helpers.dump('Prefs loading failed in onFail');
-		thisPrefs.resetPrefs();
-		jQuery().trigger('spazprefs_loaded');
-	};
-	
-	sc.helpers.dump('simpleget depot');
-	this.mojoDepot.simpleGet('SpazPrefs', onGet, onFail);
-	sc.helpers.dump('sent simpleget');
-	
-};
 
 
 
@@ -5864,26 +8415,9 @@ SpazPrefs.prototype.migrateFromMojoDepot = function() {
  * saves the current preferences
  * @todo
  */
-SpazPrefs.prototype.save = function(name) {
+SpazPrefs.prototype.save = function() {
 
-	if (sc.helpers.iswebOS()) {
-		if (!this.mojoCookie) {
-			this.mojoCookie = new Mojo.Model.Cookie('SpazPrefs');
-		}
-		
-		this.mojoCookie.put(this._prefs);
-	}
-	
-	/*
-		Titanium implementation
-		@TODO
-	*/
-	if (sc.helpers.isTitanium()) {
-		// save the file to a default place
-		var prefs_json = sc.helpers.enJSON(this._prefs);
-		Titanium.App.Properties.setString(SPAZCORE_PREFS_TI_KEY, prefs_json);
-	}
-		
+
 	
 };
 
@@ -5895,316 +8429,6 @@ SpazPrefs.prototype.save = function(name) {
 if (sc) {
 	var scPrefs = SpazPrefs;
 }
-
-
-
-
-
-
-
-
-/**
- * methods for Titanium
- */
-if (sc.helpers.isTitanium()) {
-
-	/*
-		Saves the size and placement of the window this executes in
-	*/
-	SpazPrefs.prototype.saveWindowState = function() {
-		var width  = Titanium.UI.currentWindow.getWidth();
-		var height = Titanium.UI.currentWindow.getHeight();
-		var x      = Titanium.UI.currentWindow.getX();
-		var y      = Titanium.UI.currentWindow.getY();
-		
-		if (x && y && width && height) {
-			Titanium.App.Properties.setInt('__window-width',  width);
-			Titanium.App.Properties.setInt('__window-height', height);
-			Titanium.App.Properties.setInt('__window-x',      x);
-			Titanium.App.Properties.setInt('__window-y',      y);
-		}
-	};
-
-	/*
-		Loads the size and placement of the window this executes in
-	*/
-	SpazPrefs.prototype.loadWindowState = function() {
-		if (!Titanium.App.Properties.hasProperty('__window-width')) { // we assume if this isn't set, none are set
-			this.saveWindowState(); // save the current state
-			return;
-		}
-		
-		var width  = Titanium.App.Properties.getInt('__window-width');
-		var height = Titanium.App.Properties.getInt('__window-height');
-		var x      = Titanium.App.Properties.getInt('__window-x');
-		var y      = Titanium.App.Properties.getInt('__window-y');
-		
-		if (x && y && width && height) {
-			Titanium.UI.currentWindow.setWidth(width);
-			Titanium.UI.currentWindow.setHeight(height);
-			Titanium.UI.currentWindow.setX(x);
-			Titanium.UI.currentWindow.setY(y);
-		}
-	};
-}
-
-
-
-/**
- * methods for AIR 
- * @TODO
- */
-if (sc.helpers.isAIR()) {
-
-	/*
-		Saves the size and placement of the window this executes in
-	*/
-	this.saveWindowState = function() {
-		this.set('__window-height', window.nativeWindow.width);
-		this.set('__window-height', window.nativeWindow.height);
-		this.set('__window-x', window.nativeWindow.x);
-		this.set('__window-y', window.nativeWindow.y);
-	};
-
-	/*
-		Loads the size and placement of the window this executes in
-	*/
-	this.loadWindowState = function() {
-		var width  = this.get('__window-height');
-		var height = this.get('__window-height');
-		var x      = this.get('__window-x');
-		var y      = this.get('__window-y');
-		
-		if (x && y && width && height) {
-			window.nativeWindow.width  = width;
-			window.nativeWindow.height = height;
-			window.nativeWindow.x = x;
-			window.nativeWindow.y = y;
-		}
-		
-	};
-	
-}
-
-
-
-
-
-// var SpazPrefs = function(defaults) {
-// 	
-// 	if (defaults) {
-// 		this.defaults = defaults;
-// 	} else {
-// 		this.defaults = {};
-// 	}
-// 
-// 	this.prefs    = clone(this.defaults);
-// 
-// 	/*
-// 		returns the application storage directory air.File object
-// 	*/
-// 	this.getPrefsDir = function() {
-// 		return air.File.applicationStorageDirectory;
-// 	}
-// 	
-// 	/*
-// 		returns the prefs air.File object. 
-// 	*/
-// 	this.getPrefsFile = function(name) {
-// 		if (!name) {name='preferences';}
-// 		
-// 		var prefsDir = this.getPrefsDir();
-// 		prefsFile = prefsDir.resolvePath(name+".json");
-// 		return prefsFile;
-// 	}
-// 	
-// 	/*
-// 		loads the prefs file and parses the prefs into this.prefs,
-// 		or initializes the file and loads the defaults
-// 	*/
-// 	this.load = function(name) {
-// 		var prefsFile = this.getPrefsFile(name);
-// 
-// 		// if file DNE, init file with defaults
-// 		if (prefsFile.exists) {
-// 			var prefsJSON = get_file_contents(prefsFile.url);
-// 			air.trace(prefsJSON);
-// 			var loaded_prefs = JSON.parse(prefsJSON);
-// 			for (var key in loaded_prefs) {
-// 	            this.set(key, loaded_prefs[key]);
-//         	}
-// 
-// 		} else {
-// 			init_file(prefsFile.url);
-// 			set_file_contents(prefsFile.url, this.defaults, true);
-// 			this.prefs = clone(this.defaults); // we have to pass by value, not ref
-// 		}
-// 
-// 		return prefsFile;
-// 	}
-// 	
-// 	
-// 	/*
-// 		
-// 	*/
-// 	this.save = function(name) {
-// 		var prefsFile = this.getPrefsFile(name);
-// 		set_file_contents(prefsFile.url, this.prefs, true);
-// 	};
-// 	
-// 	
-// 	/*
-// 		Get a preference
-// 	*/
-// 	this.get = function(key, encrypted) {
-// 		if (encrypted) {
-// 			return this.getEncrypted(key);
-// 		} 
-// 		
-// 		if (this.prefs[key]) {
-// 			return this.prefs[key];
-// 		} else {
-// 			return false
-// 		}
-// 	}
-// 	
-// 	/*
-// 		Saves the size and placement of the window this executes in
-// 	*/
-// 	this.saveWindowState = function() {
-// 		this.set('__window-height', window.nativeWindow.width);
-// 		this.set('__window-height', window.nativeWindow.height);
-// 		this.set('__window-x', window.nativeWindow.x);
-// 		this.set('__window-y', window.nativeWindow.y);
-// 	}
-// 
-// 	/*
-// 		Loads the size and placement of the window this executes in
-// 	*/
-// 	this.loadWindowState = function() {
-// 		var width  = this.get('__window-height');
-// 		var height = this.get('__window-height');
-// 		var x      = this.get('__window-x');
-// 		var y      = this.get('__window-y');
-// 		
-// 		if (x && y && width && height) {
-// 			window.nativeWindow.width  = width;
-// 			window.nativeWindow.height = height;
-// 			window.nativeWindow.x = x;
-// 			window.nativeWindow.y = y;
-// 		}
-// 		
-// 	}
-// 	
-// 	
-// 	/*
-// 		get an encrypted preference
-// 	*/
-// 	this.getEncrypted = function(key) {
-// 		return get_encrypted_value(key);
-// 	};
-// 	
-// 	
-// 	/*
-// 		set a preference
-// 	*/
-// 	this.set = function(key, val, encrypted) {
-// 		if (encrypted) {
-// 			return this.setEncrypted(key, val);
-// 		} 
-// 
-// 		this.prefs[key] = val;
-// 	}
-// 	
-// 	
-// 	/*
-// 		Sets an encrypted pref
-// 	*/
-// 	this.setEncrypted = function(key, val) {
-// 		return set_encrypted_value(key, val);
-// 	};
-// 	
-// 	
-// 	/*
-// 		Gets the contents of a file
-// 	*/
-// 	function get_file_contents(path) {
-// 		var f = new air.File(path);
-// 		if (f.exists) {
-// 			var fs = new air.FileStream();
-// 			fs.open(f, air.FileMode.READ);
-// 			var str = fs.readMultiByte(f.size, air.File.systemCharset);
-// 			fs.close();
-// 			return str;
-// 		} else {
-// 			return false;
-// 		}
-// 	}
-// 
-// 	/*
-// 		Saves the contents to a specified path. Serializes a passed object if 
-// 		serialize == true
-// 	*/
-// 	function set_file_contents(path, content, serialize) {
-// 
-// 		if (serialize) {
-// 			content = JSON.stringify(content);
-// 		}
-// 
-// 		// Spaz.dump('setFileContents for '+path+ ' to "' +content+ '"');
-// 
-// 		try { 
-// 			var f = new air.File(path);
-// 			var fs = new air.FileStream();
-// 			fs.open(f, air.FileMode.WRITE);
-// 			fs.writeUTFBytes(content);
-// 			fs.close();
-// 		} catch (e) {
-// 			air.trace(e.errorMsg)
-// 		}
-// 	};
-// 	
-// 	
-// 	
-// 	/*
-// 		Loads a value for a key from EncryptedLocalStore
-// 	*/
-// 	function get_encrypted_value(key) {
-// 		var storedValue = air.EncryptedLocalStore.getItem(key);
-// 		var val = storedValue.readUTFBytes(storedValue.length);
-// 		return val;
-// 	}
-// 
-// 	/*
-// 		Sets a value in the EncryptedLocalStore of AIR
-// 	*/
-// 	function set_encrypted_value(key, val) {
-// 		var bytes = new air.ByteArray();
-// 	    bytes.writeUTFBytes(val);
-// 	    return air.EncryptedLocalStore.setItem(key, bytes);
-// 	}
-// 	
-// 	/*
-// 		initializes a file at the given location. set overwrite to true
-// 		to clear out an existing file.
-// 		returns the air.File object or false
-// 	*/
-// 	function init_file(path, overwrite) {
-// 		var file = new air.File(path);
-// 		if ( !file.exists || (file.exists && overwrite) ) {
-// 			var fs = new air.FileStream();
-// 			fs.open(file, air.FileMode.WRITE);
-// 			fs.writeUTFBytes('');
-// 			fs.close();
-// 			return file;
-// 		} else {
-// 			return false;
-// 		}
-// 
-// 	}
-// 	
-// }
-
 /*jslint 
 browser: true,
 nomen: false,
@@ -6258,10 +8482,10 @@ SpazShortText.prototype.genBaseMaps = function() {
 		'boyfriend'			    :'bf',
 		'but'					:'but',
 		'girlfriend'		    :'gf',
-		'between'			    :'btwn',
+		'between'			    :'b/t',
 		'by the way'		    :'btw',
 		'definitely'		    :'def',
-		'everyone'				:'evry1',
+		'everyone'				:'evr1',
 		'favorite'				:'fav',
 		'for'					:'fr',
 		'from'					:'frm',
@@ -6272,7 +8496,7 @@ SpazShortText.prototype.genBaseMaps = function() {
 		'following'				:'fllwng',
 		'good'					:'gd',
 		'got'					:'gt',
-		'having'				:'hvng',
+		'having'				:'hvg',
 		'hours'					:'hrs',
 		'i don\'t know'		    :'idk',
 		'if i recall correctly' :'iirc',
@@ -6290,10 +8514,9 @@ SpazShortText.prototype.genBaseMaps = function() {
 		'pictures'			    :'pics',
 		'obviously'			    :'obvs',
 		'please'			    :'pls',
-		'really'			    :'rly',
-		'Seriously'			    :'srsly',
-		'Something'			    :'s/t',
-		'Sorry'				    :'sry',
+		'seriously'			    :'srsly',
+		'something'			    :'s/t',
+		'sorry'				    :'sry',
 		'text'				    :'txt',
 		'thanks'			    :'thx',
 		'think'				    :'thk',
@@ -6303,6 +8526,446 @@ SpazShortText.prototype.genBaseMaps = function() {
 		'weeks'					:'wks',
 		'with'					:'w',
 		'without'				:'w/o',
+		
+		'that'			:'tht',
+		'what'			:'wht',
+		'have'			:'hv',
+		'don\'t'			:'dnt',
+		'was'			:'ws',
+		'well'			:'wll',
+		'right'			:'rt',
+		'here'			:'hr',
+		'going'			:'gng',
+		'like'			:'lk',
+		'can'			:'cn',
+		'want'			:'wnt',
+		'that\'s'			:'thts',
+		'there'			:'thr',
+		'come'			:'cme',
+		'really'			:'rly',
+		'would'			:'wld',
+		'look'			:'lk',
+		'when'			:'whn',
+		'okay'			:'ok',
+		'can\'t'			:'cnt',
+		'tell'			:'tll',
+		'I\'ll'			:'Ill',
+		'could'			:'cl',
+		'didn\'t'			:'ddnt',
+		'yes'			:'y',
+		'had'			:'hd',
+		'then'			:'thn',
+		'take'			:'tke',
+		'make'			:'mk',
+		'gonna'			:'gna',
+		'never'			:'nvr',
+		'them'			:'thm',
+		'more'			:'mr',
+		'over'			:'ovr',
+		'where'			:'whr',
+		'what\'s'			:'whts',
+		'thing'			:'thg',
+		'maybe'			:'mybe',
+		'down'			:'dwn',
+		'very'			:'very',
+		'should'			:'shld',
+		'anything'			:'nethg',
+		'said'			:'sd',
+		'any'			:'ne',
+		'even'			:'evn',
+		'thank'			:'thk',
+		'give'			:'gve',
+		'thought'			:'thot',
+		'help'			:'hlp',
+		'talk'			:'tlk',
+		'people'			:'ppl',
+		'find'			:'fnd',
+		'nothing'			:'nthg',
+		'again'			:'agn',
+		'things'			:'thgs',
+		'call'			:'cll',
+		'told'			:'tld',
+		'great'			:'grt',
+		'before'			:'b4',
+		'better'			:'bttr',
+		'ever'			:'evr',
+		'night'			:'nite',
+		'than'			:'thn',
+		'away'			:'awy',
+		'first'			:'1st',
+		'believe'			:'blve',
+		'other'			:'othr',
+		'everything'			:'evrythg',
+		'work'			:'wrk',
+		'fine'			:'fne',
+		'home'			:'hme',
+		'after'			:'aftr',
+		'last'			:'lst',
+		'keep'			:'kp',
+		'around'			:'arnd',
+		'stop'			:'stp',
+		'long'			:'lng',
+		'always'			:'alwys',
+		'listen'			:'lstn',
+		'wanted'			:'wntd',
+		'happened'			:'hppnd',
+		'won\'t'			:'wnt',
+		'trying'			:'tryng',
+		'kind'			:'knd',
+		'wrong'			:'wrng',
+		'talking'			:'tlkg',
+		'being'			:'bng',
+		'bad'			:'bd',
+		'remember'			:'rmbr',
+		'getting'			:'gttg',
+		'together'			:'togthr',
+		'mother'			:'mom',
+		'understand'			:'undrstd',
+		'wouldn\'t'			:'wldnt',
+		'actually'			:'actly',
+		'baby'			:'bby',
+		'father'			:'dad',
+		'done'			:'dne',
+		'wasn\'t'			:'wsnt',
+		'might'			:'mite',
+		'every'			:'evry',
+		'enough'			:'engh',
+		'someone'			:'sm1',
+		'family'			:'fmly',
+		'whole'			:'whl',
+		'another'			:'anthr',
+		'jack'			:'jck',
+		'yourself'			:'yrslf',
+		'best'			:'bst',
+		'must'			:'mst',
+		'coming'			:'cmg',
+		'looking'			:'lkg',
+		'woman'			:'wmn',
+		'which'			:'whch',
+		'years'			:'yrs',
+		'room'			:'rm',
+		'left'			:'lft',
+		'tonight'			:'2nte',
+		'real'			:'rl',
+		'hmm'			:'hm',
+		'happy'			:'hpy',
+		'pretty'			:'prty',
+		'girl'			:'grl',
+		'show'			:'shw',
+		'friend'			:'frnd',
+		'already'			:'alrdy',
+		'saying'			:'syng',
+		'next'			:'nxt',
+		'job'			:'jb',
+		'problem'			:'prblm',
+		'minute'			:'min',
+		'found'			:'fnd',
+		'world'			:'wrld',
+		'thinking'			:'thkg',
+		'haven\'t'			:'hvnt',
+		'heard'			:'hrd',
+		'honey'			:'hny',
+		'matter'			:'mttr',
+		'myself'			:'myslf',
+		'couldn\'t'			:'cldnt',
+		'exactly'			:'xctly',
+		'probably'			:'prob',
+		'happen'			:'hppn',
+		'we\'ve'			:'wve',
+		'hurt'			:'hrt',
+		'both'			:'bth',
+		'gotta'			:'gtta',
+		'alone'			:'alne',
+		'excuse'			:'xcse',
+		'start'			:'strt',
+		'today'			:'2dy',
+		'ready'			:'rdy',
+		'until'			:'untl',
+		'whatever'			:'wtevr',
+		'wants'			:'wnts',
+		'hold'			:'hld',
+		'yet'			:'yt',
+		'took'			:'tk',
+		'once'			:'1ce',
+		'gone'			:'gne',
+		'called'			:'clld',
+		'morning'			:'morn',
+		'supposed'			:'sppsd',
+		'friends'			:'frnds',
+		'stuff'			:'stff',
+		'most'			:'mst',
+		'used'			:'usd',
+		'worry'			:'wrry',
+		'second'			:'2nd',
+		'part'			:'prt',
+		'truth'			:'trth',
+		'school'			:'schl',
+		'forget'			:'frgt',
+		'business'			:'biz',
+		'cause'			:'cuz',
+		'telling'			:'tllg',
+		'chance'			:'chnce',
+		'move'			:'mv',
+		'person'			:'prsn',
+		'somebody'			:'smbdy',
+		'heart'			:'hrt',
+		'point'			:'pt',
+		'later'			:'ltr',
+		'making'			:'makg',
+		'anyway'			:'nywy',
+		'many'			:'mny',
+		'phone'			:'phn',
+		'reason'			:'rsn',
+		'looks'			:'lks',
+		'bring'			:'brng',
+		'turn'			:'trn',
+		'tomorrow'			:'tmrw',
+		'trust'			:'trst',
+		'check'			:'chk',
+		'change'			:'chng',
+		'anymore'			:'anymr',
+		'town'			:'twn',
+		'aren\'t'			:'rnt',
+		'working'			:'wrkg',
+		'year'			:'yr',
+		'taking'			:'tkg',
+		'means'			:'mns',
+		'brother'			:'bro',
+		'play'			:'ply',
+		'hate'			:'h8',
+		'says'			:'sez',
+		'beautiful'			:'btfl',
+		'crazy'			:'crzy',
+		'party'			:'prty',
+		'afraid'			:'afrd',
+		'important'			:'imptnt',
+		'rest'			:'rst',
+		'word'			:'wrd',
+		'watch'			:'wtch',
+		'glad'			:'gld',
+		'sister'			:'sistr',
+		'minutes'			:'min',
+		'everybody'			:'evrybdy',
+		'couple'			:'cpl',
+		'either'			:'ethr',
+		'feeling'			:'flg',
+		'under'			:'undr',
+		'break'			:'brk',
+		'promise'			:'prmse',
+		'easy'			:'ez',
+		'question'			:'q',
+		'doctor'			:'doc',
+		'walk'			:'wlk',
+		'trouble'			:'trbl',
+		'different'			:'diff',
+		'hospital'			:'hsptl',
+		'anybody'			:'anybdy',
+		'wedding'			:'wddg',
+		'perfect'			:'prfct',
+		'police'			:'cops',
+		'waiting'			:'wtng',
+		'dinner'			:'din',
+		'against'			:'agst',
+		'funny'			:'fny',
+		'husband'			:'hsbnd',
+		'child'			:'kid',
+		'shouldn\'t'			:'shldnt',
+		'half'			:'1/2',
+		'moment'			:'mmnt',
+		'sleep'			:'slp',
+		'started'			:'strtd',
+		'young'			:'yng',
+		'sounds'			:'snds',
+		'lucky'			:'lky',
+		'sometimes'			:'smtimes',
+		'plan'			:'pln',
+		'serious'			:'srs',
+		'ahead'			:'ahd',
+		'week'			:'wk',
+		'wonderful'			:'wndfl',
+		'past'			:'pst',
+		'number'			:'#',
+		'nobody'			:'nbdy',
+		'along'			:'alng',
+		'finally'			:'fnly',
+		'worried'			:'wrrd',
+		'book'			:'bk',
+		'sort'			:'srt',
+		'safe'			:'sfe',
+		'living'			:'livg',
+		'children'			:'kids',
+		'weren\'t'			:'wrnt',
+		'front'			:'frnt',
+		'loved'			:'luvd',
+		'asking'			:'askg',
+		'running'			:'rnng',
+		'clear'			:'clr',
+		'figure'			:'fgr',
+		'felt'			:'flt',
+		'parents'			:'prnts',
+		'absolutely'			:'abs',
+		'alive'			:'alve',
+		'meant'			:'mnt',
+		'happens'			:'hppns',
+		'kidding'			:'kddg',
+		'full'			:'fl',
+		'meeting'			:'mtg',
+		'coffee'			:'cffe',
+		'sound'			:'snd',
+		'women'			:'wmn',
+		'welcome'			:'wlcm',
+		'months'			:'mnths',
+		'hour'			:'hr',
+		'speak'			:'spk',
+		'thinks'			:'thks',
+		'Christmas'			:'Xmas',
+		'possible'			:'pssble',
+		'worse'			:'wrs',
+		'company'			:'co',
+		'mistake'			:'mstk',
+		'handle'			:'hndl',
+		'spend'			:'spnd',
+		'totally'			:'ttly',
+		'giving'			:'gvg',
+		'control'			:'ctrl',
+		'realize'			:'rlze',
+		'power'			:'pwr',
+		'president'			:'pres',
+		'girls'			:'grls',
+		'taken'			:'tkn',
+		'picture'			:'pic',
+		'talked'			:'tlkd',
+		'hundred'			:'hndrd',
+		'changed'			:'chgd',
+		'completely'		:'cmpltly', 
+		'explain'			:'exp',
+		'playing'			:'plyg',
+		'relationship'			:'rlshp',
+		'loves'			:'lvs',
+		'fucking'			:'fkg',
+		'anywhere'			:'newhr',
+		'questions'			:'qs',
+		'wonder'			:'wndr',
+		'calling'			:'cllg',
+		'somewhere'			:'smwhr',
+		'straight'			:'str8',
+		'fast'			:'fst',
+		'words'			:'wrds',
+		'worked'			:'wrkd',
+		'light'			:'lite',
+		'cannot'			:'can\'t',
+		'protect'			:'prtct',
+		'class'			:'cls',
+		'surprise'			:'sprise',
+		'sweetheart'			:'swthrt',
+		'looked'			:'lkd',
+		'except'			:'xcpt',
+		'takes'			:'tks',
+		'situation'			:'sitn',
+		'besides'			:'bsds',
+		'pull'			:'pll',
+		'himself'			:'hmslf',
+		'hasn\'t'			:'hsnt',
+		'worth'			:'wrth',
+		'amazing'			:'amzg',
+		'given'			:'gvn',
+		'expect'			:'xpct',
+		'rather'			:'rthr',
+		'black'			:'blk',
+		'movie'			:'film',
+		'country'			:'cntry',
+		'perhaps'			:'prhps',
+		'watching'			:'wtchg',
+		'darling'			:'darlg',
+		'honor'			:'hnr',
+		'personal'			:'prsnl',
+		'moving'			:'movg',
+		'till'			:'til',
+		'admit'			:'admt',
+		'problems'			:'prbs',
+		'information'			:'info',
+		'honest'			:'hnst',
+		'missed'			:'mssd',
+		'longer'			:'lngr',
+		'dollars'			:'$s',
+		'evening'			:'eve',
+		'starting'			:'strtg',
+		'suppose'			:'spps',
+		'street'			:'st',
+		'sitting'			:'sttg',
+		'favor'			:'fvr',
+		'apartment'			:'apt',
+		'court'			:'crt',
+		'terrible'			:'trrbl',
+		'clean'			:'cln',
+		'learn'			:'lrn',
+		'works'			:'wks',
+		'relax'			:'rlx',
+		'million'			:'mil',
+		'prove'			:'prv',
+		'smart'			:'smrt',
+		'missing'			:'missg',
+		'forgot'			:'frgt',
+		'small'			:'sm',
+		'interested'			:'intrstd',
+		'table'			:'tbl',
+		'become'			:'bcm',
+		'pregnant'			:'preg',
+		'middle'			:'mddl',
+		'ring'			:'rng',
+		'careful'			:'crfl',
+		'figured'			:'fgrd',
+		'stick'			:'stk',
+		'stopped'			:'stppd',
+		'standing'			:'stndg',
+		'forgive'			:'frgv',
+		'wearing'			:'wearg',
+		'hoping'			:'hopg',
+		'thousand'			:'k',
+		'paper'			:'ppr',
+		'tough'			:'tuff',
+		'count'			:'cnt',
+		'birthday'			:'bday',
+		'history'			:'hstry',
+		'share'			:'shr',
+		'offer'			:'offr',
+		'hurry'			:'hrry',
+		'feet'			:'ft',
+		'wondering'			:'wonderg',
+		'building'			:'buildg',
+		'ones'			:'1s',
+		'finish'			:'fin',
+		'would\'ve'			:'wldve',
+		'interesting'			:'intrstg',
+		'enjoy'			:'njoy',
+		'road'			:'rd',
+		'staying'			:'stayg',
+		'short'			:'shrt',
+		'finished'			:'fin',
+		'respect'			:'rspct',
+		'spent'			:'spnt',
+		'attention'			:'attn',
+		'holding'			:'hldg',
+		'surprised'			:'srprsd',
+		'keeping'			:'kpg',
+		'putting'			:'puttg',
+		'dark'			:'drk',
+		'self'			:'slf',
+		'using'			:'usg',
+		'helping'			:'helpg',
+		'normal'			:'nrml',
+		'lawyer'			:'atty',
+		'floor'			:'flr',
+		'whether'			:'whthr',
+		'everything\'s'			:'evrthg\'s',
+		'present'			:'prsnt',
+		'private'			:'priv',
+		'cover'			:'cvr',
+		'judge'			:'jdg',
+		'upstairs'			:'upstrs',
+		'mommy'			:'mom',
+		'possibly'			:'pssbly',
+		'worst'			:'wrst',
 		
 		
 		/*
@@ -6393,7 +9056,9 @@ SpazShortText.prototype.genBaseMaps = function() {
 		'nine'					:'9',
 		'ten'					:'10',
 		'eleven'				:'11',
-		'twelve'				:'12'
+		'twelve'				:'12',
+		'twenty'				:'20'
+		
 	};
 	
 	
@@ -6510,8 +9175,9 @@ var sc, jQuery;
  * Constants to refer to services 
  */
 var SPAZCORE_SHORTURL_SERVICE_SHORTIE = 'short.ie';
-var SPAZCORE_SHORTURL_SERVICE_ISGD	= 'is.gd';
-var SPAZCORE_SHORTURL_SERVICE_BITLY	= 'bit.ly';
+var SPAZCORE_SHORTURL_SERVICE_ISGD	  = 'is.gd';
+var SPAZCORE_SHORTURL_SERVICE_BITLY	  = 'bit.ly';
+var SPAZCORE_SHORTURL_SERVICE_JMP     = 'j.mp';
 
 var SPAZCORE_EXPANDABLE_DOMAINS = [
 	'ad.vu',
@@ -6580,6 +9246,38 @@ SpazShortURL.prototype.getAPIObj = function(service) {
 		},
 		'processResult' : function(data) {
 			if (apis[SPAZCORE_SHORTURL_SERVICE_BITLY].processing_multiple === true) {
+				var result = sc.helpers.deJSON(data);
+				var rs = {};
+				for (var i in result.results) {
+					rs[i] = result.results[i].shortUrl;
+				}
+				return rs;
+			} else {
+				return data;
+			}
+		}
+		
+	};
+		
+	apis[SPAZCORE_SHORTURL_SERVICE_JMP] = {
+		'url'	  : 'http://j.mp/api',
+		'getData' : function(longurl, opts){
+			
+			/*
+				use the api if we're doing multiple URLs
+			*/
+			if (sc.helpers.isArray(longurl)) {
+				apis[SPAZCORE_SHORTURL_SERVICE_JMP].processing_multiple = true;
+				apis[SPAZCORE_SHORTURL_SERVICE_JMP].url = 'http://api.j.mp/shorten';
+				opts.longUrl = longurl;
+				return opts;
+			} else {
+				apis[SPAZCORE_SHORTURL_SERVICE_JMP].processing_multiple = false;
+				return { 'url':longurl };				
+			}
+		},
+		'processResult' : function(data) {
+			if (apis[SPAZCORE_SHORTURL_SERVICE_JMP].processing_multiple === true) {
 				var result = sc.helpers.deJSON(data);
 				var rs = {};
 				for (var i in result.results) {
@@ -7007,6 +9705,16 @@ SpazTimeline.prototype._init = function(opts) {
 };
 
 /**
+ * the timeline 
+ */
+SpazTimeline.prototype.last_id = -1;
+
+/**
+ * an array of data items that are represented in the timeline 
+ */
+SpazTimeline.prototype.model = [];
+
+/**
  * call this after initialization 
  */
 SpazTimeline.prototype.start = function() {
@@ -7105,17 +9813,18 @@ SpazTimeline.prototype.addItems = function(items) {
 	
 	if (this.add_method === 'append') {
 		items_html.reverse();
-		timeline_html = '<div>'+items_html.join('')+'</div>';
+		// timeline_html = '<div>'+items_html.join('')+'</div>';
+		timeline_html = items_html.join('');
 		this.append(timeline_html);
 	} else {
-		timeline_html = '<div>'+items_html.join('')+'</div>';
+		// timeline_html = '<div>'+items_html.join('')+'</div>';
+		timeline_html = items_html.join('');
 		this.prepend(timeline_html);
 	}
 	
 	this.removeExtraItems();
 	
 };
-
 
 SpazTimeline.prototype.renderItem = function(item, templatefunc) {
 	sch.debug('Rendering item in timeline');
@@ -7229,6 +9938,287 @@ browser: true,
 nomen: false,
 debug: true,
 forin: true,
+undef: true,
+white: false,
+onevar: false 
+ */
+var sc, DOMParser, jQuery, sch;
+ 
+/**
+ * A library to interact with the API for theMovieDB.org 
+ * @see <a href="http://api.themoviedb.org/2.1/">The API docs</a>
+ */
+
+/**
+ * events raised here 
+ */
+if (!sc.events) { sc.events = {}; }
+sc.events.tmdbMethodSuccess		= 'tmdbMethodSuccess';
+sc.events.tmdbMethodFailure		= 'tmdbMethodFailure';
+sc.events.tmdbMovieSearchSuccess		= 'tmdbMovieSearchSuccess';
+sc.events.tmdbMovieSearchFailure		= 'tmdbMovieSearchFailure';
+sc.events.tmdbMovieIMDBLookupSuccess	= 'tmdbMovieIMDBLookupSuccess';
+sc.events.tmdbMovieIMDBLookupFailure	= 'tmdbMovieIMDBLookupFailure';
+sc.events.tmdbMovieGetInfoSuccess		= 'tmdbMovieGetInfoSuccess';
+sc.events.tmdbMovieGetInfoFailure		= 'tmdbMovieGetInfoFailure';
+sc.events.tmdbMovieGetImagesSuccess		= 'tmdbMovieGetImagesSuccess';
+sc.events.tmdbMovieGetImagesFailure		= 'tmdbMovieGetImagesFailure';
+sc.events.tmdbPersonSearchSuccess		= 'tmdbPersonSearchSuccess';
+sc.events.tmdbPersonSearchFailure		= 'tmdbPersonSearchFailure';
+sc.events.tmdbPersonGetInfoSuccess		= 'tmdbPersonGetInfoSuccess';
+sc.events.tmdbPersonGetInfoFailure		= 'tmdbPersonGetInfoFailure';
+sc.events.tmdbHashGetInfoSuccess		= 'tmdbHashGetInfoSuccess';
+sc.events.tmdbHashGetInfoFailure		= 'tmdbHashGetInfoFailure';
+
+
+
+/**
+ * @constructor
+ * @param {Object} opts
+ * @param {string} opts.apikey the api key
+ * @param {string} [opts.lang] a language code. default is 'en'
+ * @param {string} [opts.format] the data format to return. default is 'json'
+ * @param {DOMElement} [opts.eventTarget] what to target triggered events with. default is the document element
+ */
+function SpazTMDB(opts) {
+	
+	/*
+		set defaults
+	*/
+	opts = sch.defaults({
+		'apikey':null,
+		'lang'  :'en',
+		'format':'json',
+		'eventTarget':document
+	}, opts);
+	
+	this.apikey = opts.apikey;
+	this.lang   = opts.lang;
+	this.format = opts.format;
+	this.eventTarget = opts.eventTarget;
+	
+	this.baseURL = 'http://api.themoviedb.org/2.1/';
+		
+}
+
+/**
+ * Sets the API key
+ * @param {string} apikey the api key used to access the API 
+ */
+SpazTMDB.prototype.setAPIKey = function(apikey) {
+	this.apikey = apikey;
+};
+
+/**
+ * Gets the API key
+ * @returns {string} the api key that was previously set 
+ */
+SpazTMDB.prototype.getAPIKey = function() {
+	return this.apikey;
+};
+
+/**
+ * Search for movies by title
+ * @param {string} value the value passed to the search method
+ * @param {function} [onSuccess] a callback 
+ * @param {function} [onFailure] a callback 
+ */
+SpazTMDB.prototype.movieSearch = function(value, onSuccess, onFailure) {
+	this.callMethod({
+		'method':'Movie.search',
+		'value' :value,
+		'successEvent':sc.events.tmdbMovieSearchSuccess,
+		'failureEvent':sc.events.tmdbMovieSearchFailure,
+		'onSuccess':onSuccess,
+		'onFailure':onFailure
+ 	});
+};
+
+
+
+/**
+ * Get info for a movie
+ * @param {string|number} id The id of the movie (numeric)
+ * @param {function} [onSuccess] a callback 
+ * @param {function} [onFailure] a callback 
+ */
+SpazTMDB.prototype.movieInfo = function(id, onSuccess, onFailure) {
+	this.callMethod({
+		'method':'Movie.getInfo',
+		'value' :id,
+		'successEvent':sc.events.tmdbMovieGetInfoSuccess,
+		'failureEvent':sc.events.tmdbMovieGetInfoFailure,
+		'onSuccess':onSuccess,
+		'onFailure':onFailure
+ 	});
+};
+
+
+
+/**
+ * Get images for a movie
+ * @param {string|number} id The id of the movie (numeric)
+ * @param {function} [onSuccess] a callback 
+ * @param {function} [onFailure] a callback 
+ */
+SpazTMDB.prototype.movieImages = function(id, onSuccess, onFailure) {
+	this.callMethod({
+		'method':'Movie.getImages',
+		'value' :id,
+		'successEvent':sc.events.tmdbMovieGetInfoSuccess,
+		'failureEvent':sc.events.tmdbMovieGetInfoFailure,
+		'onSuccess':onSuccess,
+		'onFailure':onFailure
+ 	});
+};
+
+
+
+/**
+ * Lookup a movie by IMDB id
+ * @param {string} id The IMDB id of the movie. ex "tt0137523"
+ * @param {function} [onSuccess] a callback 
+ * @param {function} [onFailure] a callback 
+ */
+SpazTMDB.prototype.movieInfoIMDB = function(id, onSuccess, onFailure) {
+	this.callMethod({
+		'method':'Movie.imdbLookup',
+		'value' :id,
+		'successEvent':sc.events.tmdbMovieIMDBLookupSuccess,
+		'failureEvent':sc.events.tmdbMovieIMDBLookupFailure,
+		'onSuccess':onSuccess,
+		'onFailure':onFailure
+ 	});
+};
+
+
+
+/**
+ * Search for a person
+ * @param {string|number} id The id of the person (numeric)
+ * @param {function} [onSuccess] a callback 
+ * @param {function} [onFailure] a callback 
+ */
+SpazTMDB.prototype.personInfo = function(id, onSuccess, onFailure) {
+	this.callMethod({
+		'method':'Person.getInfo',
+		'value' :id,
+		'successEvent':sc.events.tmdbPersonGetInfoSuccess,
+		'failureEvent':sc.events.tmdbPersonGetInfoFailure,
+		'onSuccess':onSuccess,
+		'onFailure':onFailure
+ 	});
+};
+
+
+
+/**
+ * Search for a person
+ * @param {string} name The name to search for
+ * @param {function} [onSuccess] a callback 
+ * @param {function} [onFailure] a callback 
+ */
+SpazTMDB.prototype.personSearch = function(name, onSuccess, onFailure) {
+	this.callMethod({
+		'method':'Person.search',
+		'value' :name,
+		'successEvent':sc.events.tmdbPersonSearchSuccess,
+		'failureEvent':sc.events.tmdbPersonSearchFailure,
+		'onSuccess':onSuccess,
+		'onFailure':onFailure
+ 	});
+};
+
+
+
+
+/**
+ * Get movie info by file hash
+ * @param {string} hash The hash corresponding to the movie
+ * @param {function} [onSuccess] a callback 
+ * @param {function} [onFailure] a callback 
+ * @see <a href="http://trac.opensubtitles.org/projects/opensubtitles/wiki/HashSourceCodes">Hash Source Codes</a>
+ */
+SpazTMDB.prototype.movieInfoHash = function(hash, onSuccess, onFailure) {
+	this.callMethod({
+		'method':'Hash.getInfo',
+		'value' :hash,
+		'successEvent':sc.events.tmdbHashGetInfoSuccess,
+		'failureEvent':sc.events.tmdbHashGetInfoFailure,
+		'onSuccess':onSuccess,
+		'onFailure':onFailure
+ 	});
+};
+
+
+
+
+
+
+/**
+ * Method to construct an API URL from the passed method and value strings
+ * @param {string} method the string for this parameter. See API docs for list
+ * @param {string} value the value we're passing to the API method. This will be encoded using encodeURIComponent() 
+ * @returns {string} the URL string
+ */
+SpazTMDB.prototype.getURL = function(method, value) {
+	var url  = this.baseURL + method + "/" + this.lang + "/" + this.format + "/" + this.apikey + "/" + encodeURIComponent(value);
+	return url;
+};
+
+
+
+
+/**
+ * a general purpose method for calling API methods via ajax and raising
+ * events on success/failure. callbacks can optionally be set for success
+ * or failure as well
+ * @param {Object} opts options for the method call
+ * @param {string} opts.method the method to call
+ * @param {string} opts.value value passed to method
+ * @param {string} [opts.successEvent] the type of event to raise on success. default is {@link sc.events.tmdbMethodSuccess}
+ * @param {string} [opts.failureEvent] the type of event to raise on failure. default is {@link sc.events.tmdbMethodFailure}
+ * @param {function} [opts.onSuccess] a callback function called on success. takes args data, textStatus
+ * @param {function} [opts.onFailure] a callback function called on failure. takes args xhr, msg, exc
+ * 
+ */
+SpazTMDB.prototype.callMethod = function(opts) {
+	var that = this;
+	
+	opts = sch.defaults({
+		'method'      :'Movie.search',
+		'value'       :'Road House',
+		'successEvent':sc.events.tmdbMethodSuccess,
+		'failureEvent':sc.events.tmdbMethodFailure,
+		'onSuccess'   :null, // callback on success
+		'onFailure'   :null  // callback on failure
+	}, opts);
+	
+	var url = this.getURL(opts.method, opts.value);
+	
+	jQuery.ajax({
+		'url' :url,
+		'type':'GET',
+		'success':function(data, textStatus) {
+			if (opts.onSuccess) {
+				opts.onSuccess.call(that, data, textStatus);
+			}
+			sch.trigger(opts.successEvent, that.eventTarget, data);
+		},
+		'error':function(xhr, msg, exc) {
+			if (opts.onFailure) {
+				opts.onFailure.call(that, xhr, msg, exc);
+			}
+			sch.trigger(opts.failure, that.eventTarget, {'url':url, 'xhr':xhr, 'msg':msg});
+		}
+	});
+};
+
+/*jslint 
+browser: true,
+nomen: false,
+debug: true,
+forin: true,
 plusplus: false,
 regexp: false,
 sub: true,
@@ -7261,17 +10251,20 @@ var SPAZCORE_SECTION_SEARCH = 'search';
 var SPAZCORE_SECTION_USER = 'user-timeline';
 var SPAZCORE_SECTION_FRIENDLIST = 'friendslist';
 var SPAZCORE_SECTION_FOLLOWERSLIST = 'followerslist';
+var SPAZCORE_SECTION_USERLISTS = 'userlists';
 
 var SPAZCORE_SERVICE_TWITTER = 'twitter';
 var SPAZCORE_SERVICE_IDENTICA = 'identi.ca';
+var SPAZCORE_SERVICE_WORDPRESS_TWITTER = 'wordpress-twitter';
 var SPAZCORE_SERVICE_CUSTOM = 'custom';
 var SPAZCORE_SERVICEURL_TWITTER = 'https://api.twitter.com/1/';
 var SPAZCORE_SERVICEURL_IDENTICA = 'https://identi.ca/api/';
+var SPAZCORE_SERVICEURL_WORDPRESS_TWITTER = 'https://twitter-api.wordpress.com/';
+
+
 
 /**
  * A Twitter API library for Javascript
- * 
- * This requires jQuery. Tested with 1.2.6
  * 
  * 
  * jQuery events raised by this library
@@ -7332,7 +10325,7 @@ function SpazTwit(username, password, opts) {
 	this.opts            = opts || {};
 	this.opts.event_mode = this.opts.event_mode || 'DOM';
 	this.opts.event_target = this.opts.event_target || document;
-	this.opts.timeout    = this.opts.timeout || 1000*60; // 60 seconds default
+	this.opts.timeout    = this.opts.timeout || this.DEFAULT_TIMEOUT; // 60 seconds default
 	
 	this.setSource('SpazCore');
 	
@@ -7364,6 +10357,9 @@ function SpazTwit(username, password, opts) {
 		};
 	}
 }
+
+
+SpazTwit.prototype.DEFAULT_TIMEOUT = 1000*60;
 
 
 SpazTwit.prototype.getUsername = function() {
@@ -7458,6 +10454,12 @@ SpazTwit.prototype.initializeData = function() {
 		'max':200,
 		'min_age':30
 	};
+	this.data[SPAZCORE_SECTION_USERLISTS] = {
+		'items':   [],
+		'newitems':[],
+		'max':500,
+		'min_age':5*60
+	};
 	// this.data.byid = {};
 };
 
@@ -7531,6 +10533,9 @@ SpazTwit.prototype.setBaseURLByService= function(service) {
 		case SPAZCORE_SERVICE_IDENTICA:
 			baseurl = SPAZCORE_SERVICEURL_IDENTICA;
 			break;
+		case SPAZCORE_SERVICE_WORDPRESS_TWITTER:
+			baseurl = SPAZCORE_SERVICEURL_WORDPRESS_TWITTER;
+			break;
 		default:
 			baseurl = SPAZCORE_SERVICEURL_TWITTER;
 			break;
@@ -7598,23 +10603,32 @@ SpazTwit.prototype.getAPIURL = function(key, urldata) {
     urls.block_destroy		= "blocks/destroy/{{ID}}.json";
     urls.start_notifications= "notifications/follow/{{ID}}.json";
     urls.stop_notifications = "notifications/leave/{{ID}}.json";
-    urls.favorites_create 	= "favourings/create/{{ID}}.json";
-    urls.favorites_destroy	= "favourings/destroy/{{ID}}.json";
+    urls.favorites_create 	= "favorites/create/{{ID}}.json";
+    urls.favorites_destroy	= "favorites/destroy/{{ID}}.json";
     urls.saved_searches_create 	= "saved_searches/create.json";
     urls.saved_searches_destroy	= "saved_searches/destroy/{{ID}}.json";
     urls.verify_credentials = "account/verify_credentials.json";
     urls.ratelimit_status   = "account/rate_limit_status.json";
 	urls.update_profile		= "account/update_profile.json";
+	urls.saved_searches		= "saved_searches.json";
+
+    // User lists URLs
+    urls.lists              = "{{USER}}/lists.json";
+    urls.lists_list         = "{{USER}}/lists/{{SLUG}}.json";
+    urls.lists_memberships  = "{{USER}}/lists/memberships.json";
+    urls.lists_timeline     = "{{USER}}/lists/{{SLUG}}/statuses.json";
+    urls.lists_members      = "{{USER}}/{{SLUG}}/members.json";
+    urls.lists_check_member = "{{USER}}/{{SLUG}}/{{ID}}.json";
+    urls.lists_subscribers  = "{{USER}}/{{SLUG}}/subscribers.json";
+    urls.lists_check_subscriber = "{{USER}}/{{SLUG}}/subscribers/{{ID}}.json";
 
 	// search
 	if (this.baseurl === SPAZCORE_SERVICEURL_TWITTER) {
 		urls.search				= "http://search.twitter.com/search.json";
 		urls.trends				= "http://search.twitter.com/trends.json";
-		urls.saved_searches		= "http://search.twitter.com/saved_searches.json";
 	} else {
 		urls.search				= "search.json";
 		urls.trends				= "trends.json";
-		urls.saved_searches		= "saved_searches.json";
 	}
 
     // misc
@@ -7630,7 +10644,19 @@ SpazTwit.prototype.getAPIURL = function(key, urldata) {
 		}
 		
 	}
-	
+
+    // Token replacement for user lists
+    if (urls[key].indexOf('{{USER}}') > - 1) {
+        if (urldata && typeof(urldata) === 'object') {
+            urls[key] = urls[key].replace('{{USER}}', urldata.user);
+        }
+    }
+
+    if (urls[key].indexOf('{{SLUG}}') > -1) {
+        if (urldata && typeof(urldata) === 'object') {
+            urls[key] = urls[key].replace('{{SLUG}}', urldata.slug);
+        }
+    }
 
     if (urls[key]) {
 	
@@ -7663,7 +10689,7 @@ SpazTwit.prototype.getAPIURL = function(key, urldata) {
  * @param {string} username optional
  * @param {string} password optional
 */
-SpazTwit.prototype.verifyCredentials = function(username, password) {
+SpazTwit.prototype.verifyCredentials = function(username, password, onSuccess, onFailure) {
 	var url = this.getAPIURL('verify_credentials');
 	
 	if (!username) {
@@ -7680,6 +10706,8 @@ SpazTwit.prototype.verifyCredentials = function(username, password) {
 		'process_callback': this._processAuthenticatedUser,
 		'success_event_type':'verify_credentials_succeeded',
 		'failure_event_type':'verify_credentials_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'method':'GET'
 	};
 
@@ -7698,11 +10726,14 @@ SpazTwit.prototype.verifyCredentials = function(username, password) {
  * @param {string} finished_event the type of event to fire 
  * @private
  */
-SpazTwit.prototype._processAuthenticatedUser = function(data, finished_event) {
+SpazTwit.prototype._processAuthenticatedUser = function(data, opts) {
 	this.me = data;
 	this.initializeData();
-	// jQuery().trigger(finished_event, [this.me]);
-	this.triggerEvent(finished_event, this.me);
+	
+	if (opts.success_callback) {
+		opts.success_callback(this.me);
+	}
+	this.triggerEvent(opts.success_event_type, this.me);
 	
 };
 
@@ -7710,11 +10741,13 @@ SpazTwit.prototype._processAuthenticatedUser = function(data, finished_event) {
 /**
  * Initiates retrieval of the public timeline. 
  */
-SpazTwit.prototype.getPublicTimeline = function() {
+SpazTwit.prototype.getPublicTimeline = function(onSuccess, onFailure) {
 	var url = this.getAPIURL('public_timeline');
 	
 	var xhr = this._getTimeline({
 		'url':url,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_public_timeline_data'
 	});
 };
@@ -7727,7 +10760,7 @@ SpazTwit.prototype.getPublicTimeline = function() {
  * @param {integer} count default is 200 
  * @param {integer} page default is null (ignored if null)
  */
-SpazTwit.prototype.getHomeTimeline = function(since_id, count, page, processing_opts) {
+SpazTwit.prototype.getHomeTimeline = function(since_id, count, page, processing_opts, onSuccess, onFailure) {
 	
 	if (!page) { page = null;}
 	if (!count) { count = 50;}
@@ -7761,6 +10794,8 @@ SpazTwit.prototype.getHomeTimeline = function(since_id, count, page, processing_
 		'username':this.username,
 		'password':this.password,
 		'process_callback'	: this._processHomeTimeline,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_home_timeline_data',
 		'failure_event_type': 'error_home_timeline_data',
 		'processing_opts':processing_opts
@@ -7770,8 +10805,9 @@ SpazTwit.prototype.getHomeTimeline = function(since_id, count, page, processing_
 /**
  * @private
  */
-SpazTwit.prototype._processHomeTimeline = function(ret_items, finished_event, processing_opts) {
-	this._processTimeline(SPAZCORE_SECTION_HOME, ret_items, finished_event, processing_opts);
+SpazTwit.prototype._processHomeTimeline = function(ret_items, opts, processing_opts) {
+	sc.helpers.dump('Processing '+ret_items.length+' items returned from home method');
+	this._processTimeline(SPAZCORE_SECTION_HOME, ret_items, opts, processing_opts);
 };
 
 
@@ -7783,7 +10819,7 @@ SpazTwit.prototype._processHomeTimeline = function(ret_items, finished_event, pr
  * @param {integer} count default is 200 
  * @param {integer} page default is null (ignored if null)
  */
-SpazTwit.prototype.getFriendsTimeline = function(since_id, count, page, processing_opts) {
+SpazTwit.prototype.getFriendsTimeline = function(since_id, count, page, processing_opts, onSuccess, onFailure) {
 	
 	if (!page) { page = null;}
 	if (!count) { count = 50;}
@@ -7817,6 +10853,8 @@ SpazTwit.prototype.getFriendsTimeline = function(since_id, count, page, processi
 		'username':this.username,
 		'password':this.password,
 		'process_callback'	: this._processFriendsTimeline,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_friends_timeline_data',
 		'failure_event_type': 'error_friends_timeline_data',
 		'processing_opts':processing_opts
@@ -7826,15 +10864,16 @@ SpazTwit.prototype.getFriendsTimeline = function(since_id, count, page, processi
 /**
  * @private
  */
-SpazTwit.prototype._processFriendsTimeline = function(ret_items, finished_event, processing_opts) {
-	this._processTimeline(SPAZCORE_SECTION_FRIENDS, ret_items, finished_event, processing_opts);
+SpazTwit.prototype._processFriendsTimeline = function(ret_items, opts, processing_opts) {
+	sc.helpers.dump('Processing '+ret_items.length+' items returned from friends method');
+	this._processTimeline(SPAZCORE_SECTION_FRIENDS, ret_items, opts, processing_opts);
 };
 
 
 /**
  *  
  */
-SpazTwit.prototype.getReplies = function(since_id, count, page, processing_opts) {	
+SpazTwit.prototype.getReplies = function(since_id, count, page, processing_opts, onSuccess, onFailure) {	
 	if (!page) { page = null;}
 	if (!count) { count = null;}
 	if (!since_id) {
@@ -7869,6 +10908,8 @@ SpazTwit.prototype.getReplies = function(since_id, count, page, processing_opts)
 		'username':this.username,
 		'password':this.password,
 		'process_callback'	: this._processRepliesTimeline,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_replies_timeline_data',
 		'failure_event_type': 'error_replies_timeline_data',
 		'processing_opts':processing_opts
@@ -7880,15 +10921,15 @@ SpazTwit.prototype.getReplies = function(since_id, count, page, processing_opts)
 /**
  * @private
  */
-SpazTwit.prototype._processRepliesTimeline = function(ret_items, finished_event, processing_opts) {
+SpazTwit.prototype._processRepliesTimeline = function(ret_items, opts, processing_opts) {
 	sc.helpers.dump('Processing '+ret_items.length+' items returned from replies method');
-	this._processTimeline(SPAZCORE_SECTION_REPLIES, ret_items, finished_event, processing_opts);
+	this._processTimeline(SPAZCORE_SECTION_REPLIES, ret_items, opts, processing_opts);
 };
 
 /**
  *  
  */
-SpazTwit.prototype.getDirectMessages = function(since_id, count, page, processing_opts) {
+SpazTwit.prototype.getDirectMessages = function(since_id, count, page, processing_opts, onSuccess, onFailure) {
 	if (!page) { page = null;}
 	if (!count) { count = null;}
 	if (!since_id) {
@@ -7922,6 +10963,8 @@ SpazTwit.prototype.getDirectMessages = function(since_id, count, page, processin
 		'username':this.username,
 		'password':this.password,
 		'process_callback'	: this._processDMTimeline,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_dms_timeline_data',
 		'failure_event_type': 'error_dms_timeline_data',
 		'processing_opts':processing_opts		
@@ -7932,15 +10975,15 @@ SpazTwit.prototype.getDirectMessages = function(since_id, count, page, processin
 /**
  * @private
  */
-SpazTwit.prototype._processDMTimeline = function(ret_items, finished_event, processing_opts) {
+SpazTwit.prototype._processDMTimeline = function(ret_items, opts, processing_opts) {
 	sc.helpers.dump('Processing '+ret_items.length+' items returned from DM method');
-	this._processTimeline(SPAZCORE_SECTION_DMS, ret_items, finished_event, processing_opts);
+	this._processTimeline(SPAZCORE_SECTION_DMS, ret_items, opts, processing_opts);
 };
 
 /**
  *  
  */
-SpazTwit.prototype.getFavorites = function(page, processing_opts) {	
+SpazTwit.prototype.getFavorites = function(page, processing_opts, onSuccess, onFailure) {	
 	if (!page) { page = null;}
 	if (!processing_opts) {
 		processing_opts = {};
@@ -7958,6 +11001,8 @@ SpazTwit.prototype.getFavorites = function(page, processing_opts) {
 		'username':this.username,
 		'password':this.password,
 		'process_callback'	: this._processFavoritesTimeline,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_favorites_timeline_data',
 		'failure_event_type': 'error_favorites_timeline_data',
 		'processing_opts':processing_opts
@@ -7967,16 +11012,16 @@ SpazTwit.prototype.getFavorites = function(page, processing_opts) {
 /**
  * @private
  */
-SpazTwit.prototype._processFavoritesTimeline = function(ret_items, finished_event, processing_opts) {
-	this._processTimeline(SPAZCORE_SECTION_FAVORITES, ret_items, finished_event, processing_opts);
+SpazTwit.prototype._processFavoritesTimeline = function(ret_items, opts, processing_opts) {
+	this._processTimeline(SPAZCORE_SECTION_FAVORITES, ret_items, opts, processing_opts);
 };
 
 
 
-SpazTwit.prototype.getSent = function(since_id, count, page) {}; // auth user's sent statuses
-SpazTwit.prototype.getSentDirectMessages = function(since_id, page) {};
+SpazTwit.prototype.getSent = function(since_id, count, page, onSuccess, onFailure) {}; // auth user's sent statuses
+SpazTwit.prototype.getSentDirectMessages = function(since_id, page, onSuccess, onFailure) {};
 
-SpazTwit.prototype.getUserTimeline = function(id, count, page) {
+SpazTwit.prototype.getUserTimeline = function(id, count, page, onSuccess, onFailure) {
 	if (!id) {
 		return false;
 	}
@@ -7998,6 +11043,8 @@ SpazTwit.prototype.getUserTimeline = function(id, count, page) {
 		'username':this.username,
 		'password':this.password,
 		'process_callback'	: this._processUserTimeline,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_user_timeline_data',
 		'failure_event_type': 'error_user_timeline_data'
 	});
@@ -8007,8 +11054,8 @@ SpazTwit.prototype.getUserTimeline = function(id, count, page) {
 /**
  * @private
  */
-SpazTwit.prototype._processUserTimeline = function(ret_items, finished_event, processing_opts) {
-	this._processTimeline(SPAZCORE_SECTION_USER, ret_items, finished_event, processing_opts);
+SpazTwit.prototype._processUserTimeline = function(ret_items, opts, processing_opts) {
+	this._processTimeline(SPAZCORE_SECTION_USER, ret_items, opts, processing_opts);
 };
 
 
@@ -8019,7 +11066,7 @@ SpazTwit.prototype._processUserTimeline = function(ret_items, finished_event, pr
  * 
  * 
  */
-SpazTwit.prototype.getCombinedTimeline = function(com_opts) {
+SpazTwit.prototype.getCombinedTimeline = function(com_opts, onSuccess, onFailure) {
 	var home_count, friends_count, replies_count, dm_count, home_since, friends_since, dm_since, replies_since = null;
 
 	var opts = {
@@ -8063,14 +11110,14 @@ SpazTwit.prototype.getCombinedTimeline = function(com_opts) {
 		}
 	}
 	
-	this.getHomeTimeline(home_since, home_count, null, opts);
-	this.getReplies(replies_since, replies_count, null, opts);
-	this.getDirectMessages(dm_since, dm_count, null, opts);
+	this.getHomeTimeline(home_since, home_count, null, opts, onSuccess, onFailure);
+	this.getReplies(replies_since, replies_count, null, opts, onSuccess, onFailure);
+	this.getDirectMessages(dm_since, dm_count, null, opts, onSuccess, onFailure);
 };
 
 
 
-SpazTwit.prototype.search = function(query, since_id, results_per_page, page, lang, geocode) {
+SpazTwit.prototype.search = function(query, since_id, results_per_page, page, lang, geocode, onSuccess, onFailure) {
 	if (!page) { page = 1;}
 	// if (!since_id) {
 	// 	if (this.data[SPAZCORE_SECTION_SEARCH].lastid && this.data[SPAZCORE_SECTION_SEARCH].lastid > 1) {
@@ -8100,6 +11147,8 @@ SpazTwit.prototype.search = function(query, since_id, results_per_page, page, la
 	this._getTimeline({
 		'url':url,
 		'process_callback'	: this._processSearchTimeline,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_search_timeline_data',
 		'failure_event_type': 'error_search_timeline_data'
 	});
@@ -8109,7 +11158,7 @@ SpazTwit.prototype.search = function(query, since_id, results_per_page, page, la
 /**
  * @private
  */
-SpazTwit.prototype._processSearchTimeline = function(search_result, finished_event, processing_opts) {	
+SpazTwit.prototype._processSearchTimeline = function(search_result, opts, processing_opts) {	
 	/*
 		Search is different enough that we need to break it out and 
 		write a custom alternative to _processTimeline
@@ -8160,8 +11209,10 @@ SpazTwit.prototype._processSearchTimeline = function(search_result, finished_eve
 			concat new items onto data.items array
 		*/
 		this.data[SPAZCORE_SECTION_SEARCH].items = this.data[SPAZCORE_SECTION_SEARCH].items.concat(this.data[SPAZCORE_SECTION_SEARCH].newitems);
+		
 		this.data[SPAZCORE_SECTION_SEARCH].items = this.removeDuplicates(this.data[SPAZCORE_SECTION_SEARCH].items);
-		this.data[SPAZCORE_SECTION_SEARCH].items = this.removeExtraElements(this.data[SPAZCORE_SECTION_SEARCH].items, this.data[SPAZCORE_SECTION_SEARCH].max);
+		sch.debug('NOT removing extras from search -- we don\'t do that anymore');
+		// this.data[SPAZCORE_SECTION_SEARCH].items = this.removeExtraElements(this.data[SPAZCORE_SECTION_SEARCH].items, this.data[SPAZCORE_SECTION_SEARCH].max);
 
 
 		var search_info = {
@@ -8174,14 +11225,20 @@ SpazTwit.prototype._processSearchTimeline = function(search_result, finished_eve
 			'page'             : search_result.page,
 			'query'            : search_result.query
 		};
-		// jQuery().trigger(finished_event, [this.data[SPAZCORE_SECTION_SEARCH].newitems, search_info]);
-		this.triggerEvent(finished_event, [this.data[SPAZCORE_SECTION_SEARCH].newitems, search_info]);
+		
+		if (opts.success_callback) {
+			opts.success_callback(this.data[SPAZCORE_SECTION_SEARCH].newitems, search_info);
+		}
+		this.triggerEvent(opts.success_event_type, [this.data[SPAZCORE_SECTION_SEARCH].newitems, search_info]);
 		
 
 
 	} else { // no new items, but we should fire off success anyway
-		// jQuery().trigger(finished_event, [[]]);
-		this.triggerEvent(finished_event, []);
+		
+		if (opts.success_callback) {
+			opts.success_callback(null, []);
+		}
+		this.triggerEvent(opts.success_event_type, []);
 	}
 	
 };
@@ -8247,11 +11304,13 @@ SpazTwit.prototype._processSearchItem = function(item, section_name) {
 };
 
 
-SpazTwit.prototype.getTrends = function() {
+SpazTwit.prototype.getTrends = function(onSuccess, onFailure) {
 	var url = this.getAPIURL('trends');
 	this._getTimeline({
 		'url':url,
 		'process_callback'	: this._processTrends,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type': 'new_trends_data',
 		'failure_event_type': 'error_trends_data'
 	});
@@ -8261,7 +11320,7 @@ SpazTwit.prototype.getTrends = function() {
 /**
  * @private
  */
-SpazTwit.prototype._processTrends = function(trends_result, finished_event, processing_opts) {
+SpazTwit.prototype._processTrends = function(trends_result, opts, processing_opts) {
 
 	if (!processing_opts) { processing_opts = {}; }
 	
@@ -8279,7 +11338,11 @@ SpazTwit.prototype._processTrends = function(trends_result, finished_event, proc
 			}
 		}
 		// jQuery().trigger(finished_event, [ret_items]);
-		this.triggerEvent(finished_event, ret_items);
+		
+		if (opts.success_callback) {
+			opts.success_callback(ret_items);
+		}
+		this.triggerEvent(opts.success_event_type, ret_items);
 		
 	}
 };
@@ -8292,7 +11355,20 @@ SpazTwit.prototype._processTrends = function(trends_result, finished_event, proc
  */
 SpazTwit.prototype._getTimeline = function(opts) {
 	
-	sc.helpers.dump(opts.data);
+	opts = sch.defaults({
+		'method':'GET',
+		'timeout':this.DEFAULT_TIMEOUT,
+		'url':null,
+		'data':null,
+		'username':null,
+		'password':null,
+		'process_callback':null,
+		'processing_opts':null,
+		'success_event_type':null,
+		'failure_event_type':null,
+		'success_callback':null,
+		'failure_callback':null
+	}, opts);
 	
 	/*
 		for closure references
@@ -8300,7 +11376,7 @@ SpazTwit.prototype._getTimeline = function(opts) {
 	var stwit = this;
 	
 	var xhr = jQuery.ajax({
-		'timeout' :this.opts.timeout,
+		'timeout' :opts.timeout,
         'complete':function(xhr, msg){
             sc.helpers.dump(opts.url + ' complete:'+msg);
 			if (msg === 'timeout') {
@@ -8324,6 +11400,9 @@ SpazTwit.prototype._getTimeline = function(opts) {
 						}
 					}
 				}
+				if (opts.failure_callback) {
+					opts.failure_callback(xhr, msg, exc);
+				}
 				if (opts.failure_event_type) {
 					sc.helpers.dump("opts.failure_event_type:"+opts.failure_event_type);
 					// jQuery().trigger(opts.failure_event_type, [{'url':opts.url, 'xhr':xhr, 'msg':msg}]);
@@ -8333,6 +11412,9 @@ SpazTwit.prototype._getTimeline = function(opts) {
 	
 	        } else {
                 sc.helpers.dump("Error:Unknown from "+opts['url']);
+				if (opts.failure_callback) {
+					opts.failure_callback(null, msg, exc);
+				}
 				if (opts.failure_event_type) {
 					// jQuery().trigger(opts.failure_event_type, [{'url':opts.url, 'xhr':null, 'msg':'Unknown Error'}]);
 					stwit.triggerEvent(opts.failure_event_type, {'url':opts.url, 'xhr':xhr, 'msg':'Unknown Error'});
@@ -8349,7 +11431,7 @@ SpazTwit.prototype._getTimeline = function(opts) {
 				sc.helpers.dump(stwit.combined_errors);
 				sc.helpers.dump(stwit.combined_finished);
 				if (opts.process_callback) {
-					opts.process_callback.call(stwit, [], opts.failure_event_type, opts.processing_opts);
+					opts.process_callback.call(stwit, [], opts, opts.processing_opts);
 				}
 			}
 			
@@ -8363,22 +11445,22 @@ SpazTwit.prototype._getTimeline = function(opts) {
 			} catch(e) {
 				stwit.triggerEvent(document, opts.failure_event_type, {'url':opts.url, 'xhr':xhr, 'msg':'Error decoding data from server'});
 			}
-			
-			
-			
+
 			if (opts.process_callback) {
 				/*
 					using .call here and passing stwit as the first param
 					ensures that "this" inside the callback refers to our
 					SpazTwit object, and not the jQuery.Ajax object
 				*/
-				opts.process_callback.call(stwit, data, opts.success_event_type, opts.processing_opts);
+				opts.process_callback.call(stwit, data, opts, opts.processing_opts);
 			} else {
+				if (opts.success_callback) {
+					sch.error('CALLING SUCCESS CALLBACK');
+					opts.success_callback(data);
+				}
 				// jQuery().trigger(opts.success_event_type, [data]);
 				stwit.triggerEvent(opts.success_event_type, data);
-				
-			}
-			
+			}			
         },
         'beforeSend':function(xhr){
 			sc.helpers.dump("beforesend");
@@ -8386,9 +11468,10 @@ SpazTwit.prototype._getTimeline = function(opts) {
 				xhr.setRequestHeader("Authorization", "Basic " + sc.helpers.Base64.encode(opts.username + ":" + opts.password));
 			}
         },
-        'type':"GET",
+        'type': 	opts.method,
         'url': 		opts.url,
-        'data': 	opts.data
+        'data': 	opts.data,
+		'dataType':'text'
 	});
 	
 	return xhr;
@@ -8399,7 +11482,9 @@ SpazTwit.prototype._getTimeline = function(opts) {
  * general processor for timeline data 
  * @private
  */
-SpazTwit.prototype._processTimeline = function(section_name, ret_items, finished_event, processing_opts) {
+SpazTwit.prototype._processTimeline = function(section_name, ret_items, opts, processing_opts) {
+	
+	sch.debug(opts);
 	
 	if (!processing_opts) { processing_opts = {}; }
 
@@ -8431,7 +11516,11 @@ SpazTwit.prototype._processTimeline = function(section_name, ret_items, finished
 		
 		if (section_name === SPAZCORE_SECTION_USER) { // special case -- we don't keep this data, just parse and fire it off
 
-			this.triggerEvent(finished_event, ret_items);
+			if (opts.success_callback) {
+				opts.success_callback(ret_items);
+			}
+
+			this.triggerEvent(opts.success_event_type, ret_items);
 			
 		} else { // this is a "normal" timeline that we want to be persistent
 			
@@ -8455,7 +11544,12 @@ SpazTwit.prototype._processTimeline = function(section_name, ret_items, finished
 				Fire off the new section data event
 			*/
 			if (!processing_opts.combined) {
-				this.triggerEvent(finished_event, this.data[section_name].items);
+				
+				if (opts.success_callback) {
+					opts.success_callback(this.data[section_name].newitems);
+				}
+				
+				this.triggerEvent(opts.success_event_type, this.data[section_name].items);
 			} else {
 				this.combined_finished[section_name] = true;
 				sc.helpers.dump("this.combined_finished["+section_name+"]:"+this.combined_finished[section_name]);
@@ -8474,7 +11568,10 @@ SpazTwit.prototype._processTimeline = function(section_name, ret_items, finished
 	} else { // no new items, but we should fire off success anyway
 		if (!processing_opts.combined) {
 			// jQuery().trigger(finished_event, []);
-			this.triggerEvent(finished_event);
+			if (opts.success_callback) {
+				opts.success_callback();
+			}
+			this.triggerEvent(opts.success_event_type);
 			
 		} else {
 			this.combined_finished[section_name] = true;
@@ -8494,14 +11591,23 @@ SpazTwit.prototype._processTimeline = function(section_name, ret_items, finished
 		
 		// sort these items -- the timelines can be out of order when combined
 
-		sc.helpers.dump('Removing duplicates in '+SPAZCORE_SECTION_COMBINED+' newitems');
 		
+		// sc.helpers.dump('Removing duplicates in '+SPAZCORE_SECTION_COMBINED+' newitems');
+		// 
 		this.data[SPAZCORE_SECTION_COMBINED].newitems = this._cleanupItemArray(this.data[SPAZCORE_SECTION_COMBINED].newitems, this.data[SPAZCORE_SECTION_COMBINED].max, this._sortItemsByDateAsc);
 		
 		if (this.combinedTimelineHasErrors()) {
+			if (opts.failure_callback) {
+				opts.failure_callback(this.combined_errors);
+			}
+			
 			this.triggerEvent('error_combined_timeline_data', this.combined_errors);
 		}
 		
+		if (opts.success_callback) {
+			opts.success_callback(this.data[SPAZCORE_SECTION_COMBINED].newitems);
+		}
+		sch.debug('this.data[SPAZCORE_SECTION_COMBINED].newitems has '+this.data[SPAZCORE_SECTION_COMBINED].newitems.length+' items');
 		this.triggerEvent('new_combined_timeline_data', this.data[SPAZCORE_SECTION_COMBINED].newitems);
 		this.data[SPAZCORE_SECTION_COMBINED].newitems = []; // reset combined.newitems
 		this.initializeCombinedTracker();
@@ -8521,7 +11627,7 @@ SpazTwit.prototype._addToSectionItems = function(section_name, arr, sortfunc) {
 	this.data[section_name].items = this.data[section_name].items.concat(arr);
 
 	this._cleanupItemArray(this.data[section_name].items, this.data[section_name].max, sortfunc);
-}
+};
 
 /**
  * Sorts (optionally), removes dupes, and removes extra items from a given
@@ -8538,7 +11644,8 @@ SpazTwit.prototype._cleanupItemArray = function(arr, max, sortfunc) {
 		arr = arr.sort(sortfunc);
 	}
 	arr = this.removeDuplicates(arr);
-	arr = this.removeExtraElements(arr, max);
+	sch.debug('NOT removing extras -- we don\'t do that anymore');
+	// arr = this.removeExtraElements(arr, max);
 	return arr;
 };
 
@@ -8562,6 +11669,13 @@ SpazTwit.prototype._processItem = function(item, section_name) {
 		if (item.in_reply_to_screen_name.toLowerCase() === item.SC_user_received_by.toLowerCase() ) {
 			item.SC_is_reply = true;
 		}
+	}
+	
+	/*
+		is an official API retweet? then add .SC_is_retweet
+	*/
+	if ( item.retweet_status ) {
+		item.SC_is_retweet = true;
 	}
 	
 	/*
@@ -8667,9 +11781,33 @@ SpazTwit.prototype._processUser = function(item, section_name) {
  * use this to call methods that will return a single response 
  * 
  * @param {obj} opts a set of options for this method 
- * @private
+ * @param {string} opts.url The url for the request
+ * @param {string} [opts.method] the HTTP method to use. default is POST
+ * @param {number} [opts.timeout] the timeout for the request. default is 60 seconds
+ * @param {object} [opts.data] data to pass with the request
+ * @param {string} [opts.username]
+ * @param {string} [opts.password]
+ * @param {function} [opts.process_callback] a function to call on the retured data for extra processing on success
+ * @param {string} [opts.success_event_type] the event to trigger on success
+ * @param {string} [opts.failure_event_type] the event to trigger on failure
+ * @param {function} [opts.success_callback] a callback to fire on success
+ * @param {function} [opts.failure_callback] a callback to fire on failure
  */
 SpazTwit.prototype._callMethod = function(opts) {
+	
+	opts = sch.defaults({
+		'method':'POST',
+		'timeout':this.DEFAULT_TIMEOUT,
+		'url':null,
+		'data':null,
+		'username':null,
+		'password':null,
+		'process_callback':null,
+		'success_event_type':null,
+		'failure_event_type':null,
+		'success_callback':null,
+		'failure_callback':null
+	}, opts);
 	
 	var method;
 	
@@ -8703,6 +11841,9 @@ SpazTwit.prototype._callMethod = function(opts) {
 						}
 					}
 				}
+				if (opts.failure_callback) {
+					opts.failure_callback(xhr, msg, exc);
+				}
 				if (opts.failure_event_type) {
 					// jQuery().trigger(opts.failure_event_type, [{'url':opts.url, 'xhr':xhr, 'msg':msg}]);
 					stwit.triggerEvent(opts.failure_event_type, {'url':opts.url, 'xhr':xhr, 'msg':msg});
@@ -8710,6 +11851,9 @@ SpazTwit.prototype._callMethod = function(opts) {
 	
 	        } else {
 	            sc.helpers.dump("Error:Unknown from "+opts['url']);
+				if (opts.failure_callback) {
+					opts.failure_callback(null, msg, exc);
+				}
 				if (opts.failure_event_type) {
 					// jQuery().trigger(opts.failure_event_type, [{'url':opts.url, 'xhr':null, 'msg':'Unknown Error'}]);
 					stwit.triggerEvent(opts.failure_event_type, {'url':opts.url, 'xhr':null, 'msg':'Unknown Error'});
@@ -8728,8 +11872,11 @@ SpazTwit.prototype._callMethod = function(opts) {
 					ensures that "this" inside the callback refers to our
 					SpazTwit object, and not the jQuery.Ajax object
 				*/
-				opts.process_callback.call(stwit, data, opts.success_event_type);
+				opts.process_callback.call(stwit, data, opts);
 			} else {
+				if (opts.success_callback) {
+					opts.success_callback(data);
+				}
 				// jQuery().trigger(opts.success_event_type, [data]);
 				stwit.triggerEvent(opts.success_event_type, data);
 				
@@ -8743,14 +11890,15 @@ SpazTwit.prototype._callMethod = function(opts) {
 	    },
 	    'type': method,
 	    'url' : opts.url,
-		'data': opts.data
+		'data': opts.data,
+		'dataType':'text'
 	});
 	return xhr;
 };
 
 
 
-SpazTwit.prototype.getUser = function(user_id) {
+SpazTwit.prototype.getUser = function(user_id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = user_id;
 	
@@ -8763,6 +11911,8 @@ SpazTwit.prototype.getUser = function(user_id) {
 		// 'process_callback': this._processUserData,
 		'success_event_type':'get_user_succeeded',
 		'failure_event_type':'get_user_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'method':'GET'
 	};
 
@@ -8793,8 +11943,8 @@ SpazTwit.prototype.getFriendsList = function() {
 /**
  * @private
  */
-SpazTwit.prototype._processFriendsList = function(ret_items, finished_event, processing_opts) {
-	this._processUserList(SPAZCORE_SECTION_FRIENDLIST, ret_items, finished_event, processing_opts);
+SpazTwit.prototype._processFriendsList = function(ret_items, opts, processing_opts) {
+	this._processUserList(SPAZCORE_SECTION_FRIENDLIST, ret_items, opts.success_event_type, processing_opts);
 };
 
 
@@ -8820,8 +11970,8 @@ SpazTwit.prototype.getFollowersList = function() {
 /**
  * @private
  */
-SpazTwit.prototype._processFollowersList = function(ret_items, finished_event, processing_opts) {
-	this._processUserList(SPAZCORE_SECTION_FOLLOWERSLIST, ret_items, finished_event, processing_opts);
+SpazTwit.prototype._processFollowersList = function(ret_items, opts, processing_opts) {
+	this._processUserList(SPAZCORE_SECTION_FOLLOWERSLIST, ret_items, opts.success_event_type, processing_opts);
 };
 
 
@@ -8830,7 +11980,7 @@ SpazTwit.prototype._processFollowersList = function(ret_items, finished_event, p
  * general processor for timeline data 
  * @private
  */
-SpazTwit.prototype._processUserList = function(section_name, ret_items, finished_event, processing_opts) {
+SpazTwit.prototype._processUserList = function(section_name, ret_items, opts, processing_opts) {
 	
 	if (!processing_opts) { processing_opts = {}; }
 
@@ -8858,17 +12008,23 @@ SpazTwit.prototype._processUserList = function(section_name, ret_items, finished
 		this.data[section_name].newitems = ret_items;
 
 		this._addToSectionItems(section_name, this.data[section_name].newitems);
-		
-		this.triggerEvent(finished_event,this.data[section_name].newitems );
+
+		if (opts.success_callback) {
+			opts.success_callback(this.data[section_name].newitems);
+		}
+		this.triggerEvent(opts.success_event_type,this.data[section_name].newitems );
 
 	} else { // no new items, but we should fire off success anyway
-		this.triggerEvent(finished_event);
+		if (opts.success_callback) {
+			opts.success_callback();
+		}
+		this.triggerEvent(opts.success_event_type);
 	}
 
 };
 
 
-SpazTwit.prototype.addFriend = function(user_id) {
+SpazTwit.prototype.addFriend = function(user_id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = user_id;
 	
@@ -8880,6 +12036,8 @@ SpazTwit.prototype.addFriend = function(user_id) {
 		'password':this.password,
 		'success_event_type':'create_friendship_succeeded',
 		'failure_event_type':'create_friendship_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':data
 	};
 
@@ -8888,7 +12046,7 @@ SpazTwit.prototype.addFriend = function(user_id) {
 	*/
 	var xhr = this._callMethod(opts);
 };
-SpazTwit.prototype.removeFriend = function(user_id) {
+SpazTwit.prototype.removeFriend = function(user_id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = user_id;
 	
@@ -8900,6 +12058,8 @@ SpazTwit.prototype.removeFriend = function(user_id) {
 		'password':this.password,
 		'success_event_type':'destroy_friendship_succeeded',
 		'failure_event_type':'destroy_friendship_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':data
 	};
 
@@ -8910,7 +12070,7 @@ SpazTwit.prototype.removeFriend = function(user_id) {
 
 };
 
-SpazTwit.prototype.block = function(user_id) {
+SpazTwit.prototype.block = function(user_id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = user_id;
 	
@@ -8922,6 +12082,8 @@ SpazTwit.prototype.block = function(user_id) {
 		'password':this.password,
 		'success_event_type':'create_block_succeeded',
 		'failure_event_type':'create_block_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':data
 	};
 
@@ -8930,7 +12092,7 @@ SpazTwit.prototype.block = function(user_id) {
 	*/
 	var xhr = this._callMethod(opts);
 };
-SpazTwit.prototype.unblock = function(user_id) {
+SpazTwit.prototype.unblock = function(user_id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = user_id;
 	
@@ -8942,6 +12104,8 @@ SpazTwit.prototype.unblock = function(user_id) {
 		'password':this.password,
 		'success_event_type':'destroy_block_succeeded',
 		'failure_event_type':'destroy_block_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':data
 	};
 
@@ -8952,11 +12116,11 @@ SpazTwit.prototype.unblock = function(user_id) {
 
 };
 
-SpazTwit.prototype.follow = function(user_id) {}; // to add notification
-SpazTwit.prototype.unfollow = function(user_id) {}; // to remove notification
+SpazTwit.prototype.follow = function(user_id, onSuccess, onFailure) {}; // to add notification
+SpazTwit.prototype.unfollow = function(user_id, onSuccess, onFailure) {}; // to remove notification
 
 
-SpazTwit.prototype.update = function(status, source, in_reply_to_status_id) {
+SpazTwit.prototype.update = function(status, source, in_reply_to_status_id, onSuccess, onFailure) {
 
 	var url = this.getAPIURL('update');
 	
@@ -8980,6 +12144,8 @@ SpazTwit.prototype.update = function(status, source, in_reply_to_status_id) {
 		'password':password,
 		'data':data,
 		'process_callback': this._processUpdateReturn,
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'success_event_type':'update_succeeded',
 		'failure_event_type':'update_failed'
 	};
@@ -8992,19 +12158,19 @@ SpazTwit.prototype.update = function(status, source, in_reply_to_status_id) {
 	
 };
 
-SpazTwit.prototype._processUpdateReturn = function(data, finished_event) {
+SpazTwit.prototype._processUpdateReturn = function(data, opts) {
 	
 	/*
 		Add this to the HOME section and fire off the event when done
 	*/	
-	this._processTimeline(SPAZCORE_SECTION_HOME, [data], finished_event);
+	this._processTimeline(SPAZCORE_SECTION_HOME, [data], opts);
 };
 
 SpazTwit.prototype.destroy = function(id) {};
 SpazTwit.prototype.destroyDirectMessage = function(id) {};
 
 
-SpazTwit.prototype.getOne = function(id) {
+SpazTwit.prototype.getOne = function(id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = id;
 	
@@ -9016,6 +12182,8 @@ SpazTwit.prototype.getOne = function(id) {
 		'password':this.password,
 		'process_callback': this._processOneItem,
 		'success_event_type':'get_one_status_succeeded',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'failure_event_type':'get_one_status_failed',
 		'method':'GET'
 	};
@@ -9027,19 +12195,21 @@ SpazTwit.prototype.getOne = function(id) {
 };
 
 
-SpazTwit.prototype._processOneItem = function(data, finished_event) {
+SpazTwit.prototype._processOneItem = function(data, opts) {
 	
 	/*
 		this item needs to be added to the friends timeline
 		so we can avoid dupes
 	*/
 	data = this._processItem(data);
-	// jQuery().trigger(finished_event, [data]);
-	this.triggerEvent(finished_event, data);
+	if (opts.success_callback) {
+		opts.success_callback(data);
+	}
+	this.triggerEvent(opts.success_event_type, data);
 	
 };
 
-SpazTwit.prototype.favorite = function(id) {
+SpazTwit.prototype.favorite = function(id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = id;
 	
@@ -9051,6 +12221,8 @@ SpazTwit.prototype.favorite = function(id) {
 		'password':this.password,
 		'success_event_type':'create_favorite_succeeded',
 		'failure_event_type':'create_favorite_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':data
 	};
 
@@ -9060,7 +12232,7 @@ SpazTwit.prototype.favorite = function(id) {
 	var xhr = this._callMethod(opts);
 };
 
-SpazTwit.prototype.unfavorite = function(id) {
+SpazTwit.prototype.unfavorite = function(id, onSuccess, onFailure) {
 	var data = {};
 	data['id'] = id;
 	
@@ -9072,6 +12244,8 @@ SpazTwit.prototype.unfavorite = function(id) {
 		'password':this.password,
 		'success_event_type':'destroy_favorite_succeeded',
 		'failure_event_type':'destroy_favorite_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':data
 	};
 
@@ -9084,7 +12258,7 @@ SpazTwit.prototype.unfavorite = function(id) {
 
 
 
-SpazTwit.prototype.updateLocation = function(location_str) {
+SpazTwit.prototype.updateLocation = function(location_str, onSuccess, onFailure) {
 	var data = {};
 	data.location = location_str;
 	
@@ -9098,6 +12272,8 @@ SpazTwit.prototype.updateLocation = function(location_str) {
 		'password':this.password,
 		'success_event_type':'update_location_succeeded',
 		'failure_event_type':'update_location_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':data
 	};
 
@@ -9269,7 +12445,7 @@ SpazTwit.prototype.removeExtraElements = function(items, max, remove_from_top) {
 /**
  * gets the saved searches the authenticating user has 
  */
-SpazTwit.prototype.getSavedSearches = function() {
+SpazTwit.prototype.getSavedSearches = function(onSuccess, onFailure) {
 	var url = this.getAPIURL('saved_searches');
 	
 	var opts = {
@@ -9278,6 +12454,8 @@ SpazTwit.prototype.getSavedSearches = function() {
 		'password':this.password,
 		'success_event_type':'new_saved_searches_data',
 		'failure_event_type':'error_saved_searches_data',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'method':'GET'
 	};
 
@@ -9292,7 +12470,7 @@ SpazTwit.prototype.getSavedSearches = function() {
  * 
  * @param {String} search_query 
  */
-SpazTwit.prototype.addSavedSearch = function(search_query) {
+SpazTwit.prototype.addSavedSearch = function(search_query, onSuccess, onFailure) {
 	var url = this.getAPIURL('saved_searches_create');
 	
 	var opts = {
@@ -9301,6 +12479,8 @@ SpazTwit.prototype.addSavedSearch = function(search_query) {
 		'password':this.password,
 		'success_event_type':'create_saved_search_succeeded',
 		'failure_event_type':'create_saved_search_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
 		'data':{'query':search_query},
 		'method':'POST'
 	};
@@ -9317,7 +12497,7 @@ SpazTwit.prototype.addSavedSearch = function(search_query) {
  * 
  * @param {String} search_id  Note that this is converted to a string via search_id.toString()
  */
-SpazTwit.prototype.removeSavedSearch = function(search_id) {
+SpazTwit.prototype.removeSavedSearch = function(search_id, onSuccess, onFailure) {
 	var url = this.getAPIURL('saved_searches_destroy', search_id.toString());
 	
 	var opts = {
@@ -9326,8 +12506,14 @@ SpazTwit.prototype.removeSavedSearch = function(search_id) {
 		'password':this.password,
 		'success_event_type':'destroy_saved_search_succeeded',
 		'failure_event_type':'destroy_saved_search_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
+		'data':{'id':search_id},
 		'method':'POST'
 	};
+	
+	sch.debug('opts for removeSavedSearch');
+	sch.debug(opts);
 
 	/*
 		Perform a request and get true or false back
@@ -9342,42 +12528,252 @@ SpazTwit.prototype.removeSavedSearch = function(search_id) {
 /**
  * retrieves the list of lists 
  */
-SpazTwit.prototype.getLists = function() {};
+SpazTwit.prototype.getLists = function(user, onSuccess, onFailure) {
+	if (!user && !this.username) {
+		return false;
+	} else if (!user) {
+	    user = this.username;
+	}
+
+	var url = this.getAPIURL('lists', {
+	    'user':user
+	});
+	
+	var opts = {
+		'url':url,
+		'username':this.username,
+		'password':this.password,
+		'success_event_type':'get_lists_succeeded',
+		'failure_event_type':'get_lists_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
+		'method':'GET'
+	};
+
+	var xhr = this._getTimeline(opts);
+};
+
+
+
+
+/**
+ * general processor for user lists data
+ * @private
+ */
+SpazTwit.prototype._processUserLists = function(section_name, ret_items, opts, processing_opts) {
+  
+    if (!processing_opts) { processing_opts = {}; }
+
+	if (ret_items.length > 0){
+		/*
+			we process each item, adding some attributes and generally making it cool
+		*/
+		for (var k=0; k<ret_items.length; k++) {
+			ret_items[k] = this._processList(ret_items[k], section_name);
+			sch.dump(ret_items[k]);
+		}
+
+		/*
+			sort items
+		*/
+		ret_items.sort(this._sortItemsAscending);
+
+		// set lastid
+		var lastid = ret_items[ret_items.length-1].id;
+		this.data[section_name].lastid = lastid;
+		sc.helpers.dump('this.data['+section_name+'].lastid:'+this.data[section_name].lastid);
+
+		// add new items to data.newitems array
+		this.data[section_name].newitems = ret_items;
+
+		this._addToSectionItems(section_name, this.data[section_name].newitems);
+
+		if (opts.success_callback) {
+			opts.success_callback(this.data[section_name].newitems);
+		}
+		this.triggerEvent(opts.success_event_type, this.data[section_name].newitems );
+
+	} else { // no new items, but we should fire off success anyway
+		
+		if (opts.success_callback) {
+			opts.success_callback();
+		}
+		this.triggerEvent(opts.success_event_type);
+	}
+};
+
+/**
+ * This modifies a Twitter user list, adding some properties. All new properties are
+ * prepended with "SC_"
+ * 
+ * this executes within the jQuery.each scope, so this === the item 
+ */
+SpazTwit.prototype._processList = function(item, section_name) {	
+	/*
+		add .SC_retrieved_unixtime
+	*/
+	if (!item.SC_retrieved_unixtime) {
+		item.SC_retrieved_unixtime = sc.helpers.getTimeAsInt();
+	}
+	
+	return item;
+};
+
 
 /**
  * retrieves a given list timeline
  * @param {string} list 
  */
-SpazTwit.prototype.getList = function(list) {};
+SpazTwit.prototype.getListInfo = function(list, user, onSuccess, onFailure) {
+	if (!user && !this.username) {
+		sch.error('must pass a username or have one set to get list');
+		return false;
+	}
+	
+	user = user || this.username;
+
+	var url = this.getAPIURL('lists_list', {
+	    'user':user,
+		'slug':list
+	});
+	
+	var opts = {
+		'url':url,
+		'username':this.username,
+		'password':this.password,
+		'success_event_type':'get_list_succeeded',
+		'failure_event_type':'get_list_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
+		'method':'GET'
+	};
+
+	var xhr = this._callMethod(opts);
+};
+
+
+/**
+ * retrieves a given list timeline
+ * @param {string} list 
+ * @param {string} user the user who owns this list
+ * @param {function} [onSuccess] function to call on success
+ * @param {function} [onFailure] function to call on failure
+ */
+SpazTwit.prototype.getListTimeline = function(list, user, onSuccess, onFailure) {
+	if (!user && !this.username) {
+		sch.error('must pass a username or have one set to get list');
+		return false;
+	}
+	
+	user = user || this.username;
+
+	var url = this.getAPIURL('lists_timeline', {
+	    'user':user,
+		'slug':list
+	});
+	
+	var opts = {
+		'url':url,
+		'username':this.username,
+		'password':this.password,
+		'success_event_type':'get_list_timeline_succeeded',
+		'failure_event_type':'get_list_timeline_failed',
+		'success_callback':onSuccess,
+		'failure_callback':onFailure,
+		'method':'GET',
+		'process_callback':this._processListTimeline,
+		'processing_opts': {
+			'user':user,
+			'slug':list
+		}
+	};
+
+	var xhr = this._getTimeline(opts);
+};
+
+
+SpazTwit.prototype._processListTimeline = function(data, opts, processing_opts) {
+	if (!processing_opts) { processing_opts = {}; }
+	
+	var user = processing_opts.user || null;
+	var slug = processing_opts.slug || null;
+	
+	var rdata = {
+		'statuses':data,
+		'user':user,
+		'slug':slug
+	};
+	
+	/*
+		grab the array of items
+	*/
+	// jQuery().trigger(finished_event, [ret_items]);
+	
+	if (opts.success_callback) {
+		opts.success_callback(rdata);
+	}
+	this.triggerEvent(opts.success_event_type, rdata);
+};
 
 /**
  * retrieves a given list's members
  * @param {string} list 
  */
-SpazTwit.prototype.getListMembers = function(list) {};
+SpazTwit.prototype.getListMembers = function(list, user) {
+	if (!user && !this.username) {
+		sch.error('must pass a username or have one set to get list');
+		return false;
+	}
+	
+	user = user || this.username;
+
+	var url = this.getAPIURL('lists_members', {
+	    'user':user,
+		'slug':list
+	});
+	
+	var opts = {
+		'url':url,
+		'username':this.username,
+		'password':this.password,
+		'success_event_type':'get_list_members_succeeded',
+		'failure_event_type':'get_list_members_failed',
+		'method':'GET',
+		'process_callback':this._processListTimeline,
+		'processing_opts': {
+			'user':user,
+			'slug':list
+		}
+	};
+
+	var xhr = this._getTimeline(opts);
+};
 
 /**
- * create a new list
+ * create a new list for the authenticated user
  * @param {string} list  The list name
  * @param {string} visibility   "public" or "private"
+ * @param {string} [description]  The list description
  */
-SpazTwit.prototype.addList = function(list, visibility) {};
+SpazTwit.prototype.addList = function(list, visibility, description) {
+	
+};
 
 /**
  * delete a list
  * @param {string} list  The list name 
  */
-SpazTwit.prototype.removeList = function(list) {};
+SpazTwit.prototype.removeList = function(list, user) {};
 
 /**
  * add a user to a list
  */
-SpazTwit.prototype.addUserToList = function(user, list) {};
+SpazTwit.prototype.addUserToList = function(user, list, list_user) {};
 
 /**
  * delete a user from a list 
  */
-SpazTwit.prototype.removeUserFromList = function(user, list) {};
+SpazTwit.prototype.removeUserFromList = function(user, list, list_user) {};
 
 
 
@@ -9399,7 +12795,6 @@ SpazTwit.prototype.triggerEvent = function(type, data) {
 	}
 	
 };
-
 
 /**
  * shortcut for SpazTwit if the SpazCore libraries are being used
@@ -9535,7 +12930,124 @@ if (sc) {
 }
 * 
 * 
-*//*jslint 
+*/
+/**
+ * THIS IS NOT FINISHED
+ * 
+ * returns the current geocode location as a string and the full object as second param
+ * 
+ * raises events: 'location_retrieved_success', 'location_retrieved_error'
+ * 
+ * @param {Object}   controller  a Mojo scene controller
+ * @param {Function} onsuccess
+ * @param {Function} onerror
+ */
+sc.helpers.getCurrentLocation = function(onsuccess, onerror) {
+
+	var success = function(data) {
+		if (onsuccess) {
+			onsuccess(data);
+		}
+		var geoloc = data.latitude + ',' + data.longitude;
+		// jQuery().trigger('location_retrieved_success', [geoloc,data]);
+	};
+
+	var error = function(data) {
+		if (onerror) {
+			onerror(data);
+		}
+		// jQuery().trigger('location_retrieved_error', [errorCode]);
+	};
+
+	var loc = new Mojo.Service.Request('palm://com.palm.location', {
+			method:"getCurrentPosition",
+			parameters:{
+				'accuracy'     : 1,
+				'responseTime' : 1,
+				'maximumAge'   : 30 // seconds
+			},
+			onSuccess:success,
+			onFailure:error
+		}
+	);
+};/*jslint 
+browser: true,
+nomen: false,
+debug: true,
+forin: true,
+undef: true,
+white: false,
+onevar: false 
+ */
+var sc, Mojo, use_palmhost_proxy;
+
+/**
+ * opts = {
+ *  content_type:'', // optional
+ *  field_name:'', //optional, default to 'media;
+ *  file_url:'',
+ *  url:'', // REQ
+ *  platform: {
+ * 		sceneAssistant:{} // REQ; the sceneAssistant we're firing the service req from
+ *  }
+ * 	extra:{...} // extra post fields (text/plain only atm)
+ * } 
+ * @param Function onSuccess 
+ */
+sc.helpers.HTTPUploadFile = function(opts, onSuccess, onFailure) {
+	
+	sch.debug('in HTTPUploadFile ================!!!!!!!!!!!!!!');
+	
+	var key, val, postparams = [];
+	var file_url   = opts.file_url || null;
+	var url        = opts.url      || null;
+	var field_name = opts.field_name || 'media';
+	var content_type = opts.content_type || 'img';
+	
+	if (opts.extra) {
+		for (key in opts.extra) {
+			val = opts.extra[key];
+			postparams.push({ 'key' :key, 'data':val, contentType:'text/plain' });
+		}
+	}
+	
+	if (opts.platform) {
+		var sceneAssistant = opts.platform.sceneAssistant;
+	} else {
+		sch.error('You must pass the opts.platform.sceneAssistant argument to upload on webOS');
+		return;
+	}
+	
+	sch.debug('OPTS =============');
+	sch.debug(opts);
+	sch.debug('OPTS.EXTRA =============');
+	sch.debug(opts.extra);
+	sch.debug('ONSUCCESS =============');
+	sch.debug(onSuccess);
+	sch.debug('ONFAILURE =============');
+	sch.debug(onFailure);
+	sch.debug('POSTPARAMS =============');
+	sch.debug(postparams);
+	sch.debug('sceneAssistant =============');
+	sch.debug(sceneAssistant);
+
+	
+	sceneAssistant.controller.serviceRequest('palm://com.palm.downloadmanager/', {
+		method: 'upload', 
+		parameters: {
+			'url'        : url,
+			'contentType': content_type,
+			'fileLabel'  : field_name,
+			'fileName'   : file_url,
+			'postParameters': postparams,
+			cookies      : {}, // optional
+			customHttpHeaders: [], // optional
+			subscribe    : true 
+		},
+		'onSuccess' : onSuccess,
+		'onFailure' : onFailure
+	 });
+};/*jslint 
 browser: true,
 nomen: false,
 debug: true,
@@ -9549,7 +13061,7 @@ var sc, Mojo, use_palmhost_proxy;
  
  
 /**
- * This should contain definitions for all methods from helpers/sys.js tagged @platformsub 
+ * This should contain definitions for all methods from helpers/sys.js tagged @platformstub 
  */
 
 /**
@@ -9585,12 +13097,32 @@ sc.helpers.dump = function(obj, level) {
 };
 
 
+/*
+	Open a URL in the default system web browser
+*/
+sc.helpers.openInBrowser = function(url) {
+	var c = Mojo.Controller.getAppController();
+	c.serviceRequest('palm://com.palm.applicationManager', {
+		method: 'open',
+		parameters: {
+			id: 'com.palm.app.browser',
+			params: {
+				target: url
+			}
+		}
+	});
+};
+
+
 /**
  * this is specific to webOS, for retrieving the proper URL prefixed with the Palm Host proxy if needed 
  * @param {string} url
  */
 sc.helpers.getMojoURL = function(url) {
 	if (typeof Mojo !== "undefined") { // we're in webOS		
+		/*
+			I would like to apologize for using a global here. ick.
+		*/
 		if (use_palmhost_proxy) { // we are not on an emu or device, so proxy calls
 			var re = /https?:\/\/.[^\/:]*(?::[0-9]+)?/;
 			var match = url.match(re);
@@ -9606,6 +13138,136 @@ sc.helpers.getMojoURL = function(url) {
 		return url;
 	}
 	
-};/**
+};
+/*jslint 
+browser: true,
+nomen: false,
+debug: true,
+forin: true,
+undef: true,
+white: false,
+onevar: false 
+ */
+var sc, Mojo;
+
+
+/**
+ * WEBOS
  * platform-specific definitions for prefs lib 
  */
+
+SpazPrefs.prototype.load = function() {
+	
+	var thisPrefs = this;
+	
+	
+	sc.helpers.dump('this is webOS');
+	if (!this.mojoCookie) {
+		sc.helpers.dump('making cookie');
+		this.mojoCookie = new Mojo.Model.Cookie(SPAZCORE_PREFS_MOJO_COOKIENAME);
+		
+		
+		
+	}
+	var loaded_prefs = this.mojoCookie.get();
+	if (loaded_prefs) {
+		sc.helpers.dump('Prefs loaded');
+		for (var key in loaded_prefs) {
+			//sc.helpers.dump('Copying loaded pref "' + key + '":"' + thisPrefs._prefs[key] + '" (' + typeof(thisPrefs._prefs[key]) + ')');
+            thisPrefs._prefs[key] = loaded_prefs[key];
+       	}
+		jQuery().trigger('spazprefs_loaded');
+	} else {
+		sc.helpers.dump('Prefs loading failed in onGet');
+		this.migrateFromMojoDepot();
+		// thisPrefs.resetPrefs();
+	}
+	
+
+	
+
+}
+
+SpazPrefs.prototype.save = function() {
+	if (sc.helpers.iswebOS()) {
+		if (!this.mojoCookie) {
+			this.mojoCookie = new Mojo.Model.Cookie(SPAZCORE_PREFS_MOJO_COOKIENAME);
+		}
+		
+		this.mojoCookie.put(this._prefs);
+	}
+
+};
+
+/**
+ * @todo 
+ */
+SpazPrefs.prototype.getEncrypted = function(key) {
+
+};
+
+/**
+ * @todo 
+ */
+SpazPrefs.prototype.setEncrypted = function(key, val) {
+
+};
+
+
+
+SpazPrefs.prototype.saveWindowState = function() {
+	sch.error('saveWindowState not available');
+	return undefined;
+};
+
+
+SpazPrefs.prototype.loadWindowState = function() {
+	sch.error('loadWindowState not available');
+	return undefined;
+};
+
+/**
+ * We used to store the data in a Depot, so we may need
+ * to migrate data out of there 
+ */
+SpazPrefs.prototype.migrateFromMojoDepot = function() {
+	
+	var thisPrefs = this;
+	
+	sch.error('MIGRATING FROM DEPOT! ============================ ');
+	
+	sc.helpers.dump('this is webOS');
+	if (!this.mojoDepot) {
+		sc.helpers.dump('making depot');
+		this.mojoDepot = new Mojo.Depot({
+			name:'SpazDepotPrefs',
+			replace:false
+		});
+	}
+	
+	var onGet = function(loaded_prefs) {
+		if (loaded_prefs) {
+			sc.helpers.dump('Prefs loaded');
+			for (var key in loaded_prefs) {
+				//sc.helpers.dump('Copying loaded pref "' + key + '":"' + thisPrefs._prefs[key] + '" (' + typeof(thisPrefs._prefs[key]) + ')');
+	            thisPrefs._prefs[key] = loaded_prefs[key];
+	       	}
+		} else {
+			sc.helpers.dump('Prefs loading failed in onGet');
+			thisPrefs.resetPrefs();
+		}
+		thisPrefs.save(); // write to cookie
+		jQuery().trigger('spazprefs_loaded');
+	};
+
+	var onFail = function() {
+		sc.helpers.dump('Prefs loading failed in onFail');
+		thisPrefs.resetPrefs();
+		jQuery().trigger('spazprefs_loaded');
+	};
+	
+	sc.helpers.dump('simpleget depot');
+	this.mojoDepot.simpleGet('SpazPrefs', onGet, onFail);
+	sc.helpers.dump('sent simpleget');
+	
+};

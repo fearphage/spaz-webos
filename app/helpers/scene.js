@@ -18,7 +18,8 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 			{ label: $L('New Search Card'),	command: 'new-search-card' },
 			{ label: $L('Preferences...'),	command:Mojo.Menu.prefsCmd },
 			{ label: $L('About Spaz'),		command: 'appmenu-about' },
-			{ label: $L('Help...'),			command:Mojo.Menu.helpCmd }
+			{ label: $L('Help...'),			command:Mojo.Menu.helpCmd },
+			{ label: $L('Donate...'),		command:'donate' }
 		];
 
 		if (!opts) {
@@ -87,7 +88,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 
 	assistant.createStage = function(sceneName, sceneArgs, stageName) {
 		// "nocache:true" tells sysmanager to not use the card caching strategy on compose cards
-		var params = {name: stageName, assistantName:'StageLightweightSearchAssistant'};
+		var params = {name: stageName, assistantName:'StageAssistant'};
 		var callback = function(stageController) {
 			stageController.pushScene(sceneName, sceneArgs, stageName);
 		};
@@ -99,8 +100,8 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	 */
 	assistant.handleCommand = function(event){
 		
-		dump(event);
-		dump(event.command);
+		sch.error(event);
+		sch.error(event.command);
 		
 		if (event.type == Mojo.Event.command) {
 			switch (event.command) {
@@ -121,7 +122,11 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 				case 'new-search-card':
 
 					sc.app.new_search_card++;
-					this.createStage('search-twitter', { 'lightweight':true }, sc.app.search_card_prefix+sc.app.new_search_card);
+					this.createStage(
+						'search-twitter',
+						{'lightweight':'false'},
+						sc.app.search_card_prefix+sc.app.new_search_card
+					);
 
 					break;
 					
@@ -166,6 +171,17 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 				case 'refresh':
 					this.refresh(); // need to have a "refresh" method defined for each scene asst
 					break;
+				
+				/*
+					This is only in the search-twitter-assistant scene
+				*/
+				case 'save-search':
+					if (this.isSavedSearch === false) {
+						this.saveSearch(this.searchBoxModel.value);
+					} else {
+						this.removeSearch(this.searchBoxModel.value);
+					}
+					break;
 
 			}
 		}
@@ -181,7 +197,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		}
 		this.topContainer = this.scroller.down();
 		dump('Scrolling to top');
-		this.scroller.mojo.revealTop(this.topContainer);
+		this.scroller.mojo.scrollTo(0,0, true);
 	};
 	
 	/**
@@ -281,7 +297,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	 */
 	assistant.addPostPopup = function(event) {
 
-		alert('DEPRECATED');
+		// alert('DEPRECATED');
 
 		
 	};
@@ -326,7 +342,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	 */
 	assistant.removePostPopup = function(event) {
 		
-		alert('DEPRECATED');
+		// alert('DEPRECATED');
 		
 	};
 
@@ -377,12 +393,71 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		
 		this.showPostPanel({
 			'text'         : text,
-			'type'         : null,
+			'type'         : 'rt',
 			'select_start' : text.length,
 			'select_length': text.length
 		});
+	};
+
+	/**
+	 *  
+	 */
+	assistant.prepQuote = function(entryobj) {
+		var text = entryobj.SC_text_raw;
+		var screenname = entryobj.user.screen_name;
+
+		var text = text+' /via @' + screenname;
+		
+		this.showPostPanel({
+			'text'         : text,
+			'type'         : 'quote',
+			'select_start' : text.length,
+			'select_length': text.length
+		});
+	};
 
 
+	/**
+	 *  
+	 */
+	assistant.emailTweet = function(tweetobj) {
+		
+		var message = '';
+		
+		message = ""
+			+ "From @"+tweetobj.user.screen_name + ":<br><br>"
+			+ sch.autolink(tweetobj.SC_text_raw) + "<br><br>"
+			+ sch.autolink("Shared from Spaz http://getspaz.com")+"\n\n";
+		
+		Spaz.sendEmail({
+	      msg: message,
+	      subject: "A tweet by @"+tweetobj.user.screen_name+" shared from Spaz",
+	      controller: this.controller
+	    });
+	};
+
+
+	/**
+	 *  
+	 */
+	assistant.SMSTweet = function(tweetobj) {
+		
+		var message = '';
+		
+		message = ""
+			+ "From @"+tweetobj.user.screen_name+":\n"
+			+ tweetobj.SC_text_raw+"\n\n"
+			+ "Shared from Spaz http://getspaz.com\n\n";
+		
+		this.controller.serviceRequest('palm://com.palm.applicationManager', {
+			method:'launch',
+			parameters:{
+				id:"com.palm.app.messaging",
+				params:{
+					'messageText':message
+				}
+			}
+		});
 	};
 
 	/**
@@ -398,7 +473,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	
 		this.showPostPanel({
 			'text'         : text,
-			'type'         : null,
+			'type'         : 'dm',
 			'select_start' : 2,
 			'select_length': text.length
 		});
@@ -420,7 +495,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		
 		this.showPostPanel({
 			'text'         : text,
-			'type'         : null,
+			'type'         : 'photo',
 			'select_start' : url.length+1,
 			'select_length': text.length
 		});		
@@ -440,7 +515,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	
 		this.showPostPanel({
 			'text'         : text,
-			'type'         : null,
+			'type'         : 'reply',
 			'select_start' : text.length,
 			'select_length': text.length,
 			'irt_status'   : statusobj,
@@ -454,8 +529,14 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	/**
 	 * 
 	 */
-	assistant.searchFor = function(terms, scenetype) {
-
+	assistant.searchFor = function(terms, scenetype, saved_id) {
+		
+		if (!saved_id) {
+			saved_id = null;
+		} else {
+			saved_id = parseInt(saved_id, 10);
+		}
+		
 		var lightweight = false;
 		if (scenetype === 'lightweight') {
 			lightweight = true;
@@ -470,7 +551,8 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 			
 		Mojo.Controller.stageController.pushScene("search-twitter", {
 			'searchterm': terms,
-			'lightweight': lightweight
+			'lightweight': lightweight,
+			'saved_id': saved_id
 		});
 	};
 
@@ -487,7 +569,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 
 		jQuery('#'+id+'-title').text(message);
 		jQuery('#'+id+'-container').show();
-		$(id).mojo.start();
+		jQuery('#'+id)[0].mojo.start();
 		
 		dump("SPINNER CONTAINER HTML (start):"+jQuery('#'+id+'-container').get(0).outerHTML);
 	};
@@ -513,7 +595,9 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		jQuery('#'+id).get(0).mojo.start();
 	};
 
-
+	/**
+	 * stops and hides a spinner 
+	 */
 	assistant.hideInlineSpinner = function(id) {
 		jQuery('#'+id).get(0).mojo.stop();
 		jQuery('#'+id+'-container').hide();
@@ -562,26 +646,58 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	};
 
 	
-	
-	assistant.newMsgBanner = function(count) {
+	/**
+	 * creates a new dashboard notification for new message counts
+	 * @param {Integer} count
+	 * @param {String} category newMessages (default), newMentions or newDirectMessages
+	 */
+	assistant.newMsgBanner = function(count, category) {
+		
+		var title, msg;
+		
+		if (!category) {
+			category = 'newMessages';
+		}
+		
+		switch(category) {
+			case 'newMessages':
+				title = 'New Message(s)';
+				msg   = "You have "+count+" new message(s)";
+				break;
+			case 'newMentions':
+				title = 'New @Mention(s)';
+				msg   = "You have "+count+" new mention(s)";
+				break;
+			case 'newDirectMessages':
+				title = 'New Direct Message(s)';
+				msg   = "You have "+count+" new direct message(s)";
+				break;
+		}
+		
 		var launchArgs = {
 			'fromstage':this.getStageName()
 		};
+		
 		var bannerArgs = {
-			'messageText':"There are "+count+" new messages"
+			'messageText':msg
 		};
+		
 		if (sc.app.prefs.get('sound-enabled')) {
 			bannerArgs.soundClass = 'alerts';
 		}
-		var category = 'newMessages';
+		
 		var appController = Mojo.Controller.getAppController();
 		
 		appController.showBanner(bannerArgs, launchArgs, category);
-		this.showDashboard($L('New Messages'), bannerArgs.messageText, count, this.getStageName());
+		this.showDashboard($L(title), bannerArgs.messageText, count, this.getStageName());
 	};
 
 
-
+	/**
+	 * creates a new dashboard notification for new search result counts
+	 * @param {Integer} count
+	 * @param {String} query the search query
+	 */
 	assistant.newSearchResultsBanner = function(count, query) {				
 		var category = 'newSearchResults_'+query;
 		var appController = Mojo.Controller.getAppController();
@@ -590,7 +706,7 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 			'fromstage':this.getStageName()
 		};
 		var bannerArgs = {
-			'messageText':count+" new results for '"+query+"'"
+			'messageText':count+" new result(s) for '"+query+"'"
 		};
 		if (sc.app.prefs.get('sound-enabled')) {
 			bannerArgs.soundClass = 'alerts';
@@ -598,22 +714,48 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		
 		
 		appController.showBanner(bannerArgs, launchArgs, category);
-		this.showDashboard($L('New Messages'), bannerArgs.messageText, count, this.getStageName());
+		this.showDashboard($L('New Search Results'), bannerArgs.messageText, count, this.getStageName());
 		
 	};
 	
 	
-	
+	/**
+	 * generalized method to show a dashboard notification 
+	 */
 	assistant.showDashboard   = function(title, message, count, fromstage) {
-		
-		//  Post a banner notification and create or update Dashboard if there are new stories 
+ 		
+		var sceneArgs;
+
+		/*
+			if title is a string, then we're getting the 4-param args. otherwise we assume
+			there is only one arg and it's the sceneArgs
+		*/
+		if (sch.isString(title)) {
+			sceneArgs = {
+				'template_data':{
+					'title': title,
+					'message': message,
+					'count': count
+				},
+				'fromstage':fromstage
+			};
+		} else {
+			sceneArgs = title;
+		}
+
 		var appController = Mojo.Controller.getAppController(); 
 		var dashboardStageController = appController.getStageProxy(SPAZ_DASHBOARD_STAGENAME); 
 
 		if (dashboardStageController) { 
-			dashboardStageController.delegateToSceneAssistant("updateDashboard", title, message, count, fromstage); 
+			dashboardStageController.delegateToSceneAssistant("updateDashboard", {
+				'template_data': {
+					'title':title,
+					'message':message,
+					'count':count
+				},
+				'fromstage':fromstage
+			}); 
 		} else {
-			var sceneArgs = {'title': title, 'message': message, 'count': count, 'fromstage':fromstage};
 			var pushDashboard = function(stageController){
 				stageController.pushScene('dashboard', sceneArgs); 
 			}; 
@@ -768,7 +910,9 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	};
 	
 	
-	
+	/**
+	 * Check to see if we are connected to the Internet 
+	 */
 	assistant.checkInternetStatus = function(on_success, on_failure) {
 		this.controller.serviceRequest('palm://com.palm.connectionmanager', {
 		    method: 'getstatus',
@@ -778,7 +922,6 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		});
 	};
 
-	
 	
 	
 	
@@ -812,39 +955,107 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		}
 
 		var dialog_widget = Mojo.Controller.errorDialog(error_html);
-
-		
-		// /*
-		// 	We want to be able to pass html into the error dialogs, but escaping is on,
-		// 	so we do a little dynamic workaround
-		// */
-		// var dialog_widget = Mojo.Controller.errorDialog(msg+' {{error_html}}');
-		// dialog_widget.innerHTML = dialog_widget.innerHTML.replace('{{error_html}}', error_html);
 		
 	};
 
-
+	
 	assistant.clearTimelineCache = function(callback) {
 		this.cacheDepot = TempCache.clear();
+		sc.app.Tweets.reset();
 	};
 	
 	
 	
-	
+	/**
+	 * Binds jQuery listeners for timeline entry taps contained in the passed selector. Uses .live()
+	 */
 	assistant.bindTimelineEntryTaps = function(tl_selector) {
+		var thisA = this;
+		
+		jQuery(tl_selector+' div.timeline-entry', this.scroller).live(Mojo.Event.hold, function(e) {
+			/*
+				Set this so we don't fire a tap after firing the hold
+			*/
+			e.target.holdFired = true;
+			
+			
+			
+			thisA.controller.popupSubmenu({
+				onChoose: function(cmd) {
+					var jqthis;
+					
+					sch.error(e.target.outerHTML);
+					
+					if (jQuery(e.target).is('div.timeline-entry')) {
+						sch.error('we are on the entry');
+						jqthis = jQuery(e.target); // we're on the timeline element
+					} else {
+						sch.error('we are below the entry');
+						jqthis = jQuery(e.target).parents('div.timeline-entry'); // get the containing timeline entry
+					}
+					
+					
+					var username   = jqthis.attr('data-user-screen_name');
+					sch.error(username);
+					
+					var status_id  = jqthis.attr('data-status-id');
+					sch.error(status_id);
+
+					var is_dm      = !!jqthis.hasClass('dm');
+					sch.error(is_dm);
+					
+					sc.app.Tweets.get(status_id, is_dm, function(status_obj) {
+						sch.error('status_obj:');
+						sch.error(status_obj);
+
+						switch (cmd) {
+							case 'reply':
+								thisA.prepReply(username, status_id, status_obj);
+								break;
+							case 'retweet':
+								thisA.prepRetweet(status_obj);
+								break;
+							case 'quote':
+								thisA.prepQuote(status_obj);
+								break;
+							default:
+								return;
+						};						
+					});
+					
+				},
+				placeNear: e.target,
+				items: [
+					{label: '@reply', command: 'reply'},
+					{label: 'ReTweet', command: 'retweet'},
+					{label: 'Quote', command:   'quote'}
+				]
+			});
+			
+		});
+		
 		jQuery(tl_selector+' div.timeline-entry', this.scroller).live(Mojo.Event.tap, function(e) {
+			
+			/*
+				Check to see if a hold already fired. If so, don't do *anything*
+			*/
+			if (e.target.holdFired) {
+				e.target.holdFired = false;
+				return;
+			}
+			
 			var jqtarget = jQuery(e.target);
 
 			e.stopImmediatePropagation();
 
 			if (jqtarget.is('div.timeline-entry>.user') || jqtarget.is('div.timeline-entry>.user img')) {
-				var userid = jQuery(this).attr('data-user-screen_name');
+				var userid = jQuery(this).attr('data-user-id');
 				Mojo.Controller.stageController.pushScene('user-detail', userid);
 				return;
 
 			} else if (jqtarget.is('.username.clickable')) {
 				var userid = jqtarget.attr('data-user-screen_name');
-				Mojo.Controller.stageController.pushScene('user-detail', userid);
+				Mojo.Controller.stageController.pushScene('user-detail', '@'+userid);
 				return;
 
 			} else if (jqtarget.is('.hashtag.clickable')) {
@@ -884,7 +1095,16 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		});
 	};
 	
+	
+	
+
+	
+	
+	/**
+	 * Unbinds jQuery listeners for timeline entry taps contained in the passed selector. Uses .die()
+	 */
 	assistant.unbindTimelineEntryTaps = function(tl_selector) {
+		jQuery(tl_selector+' div.timeline-entry', this.scroller).die(Mojo.Event.hold);
 		jQuery(tl_selector+' div.timeline-entry', this.scroller).die(Mojo.Event.tap);
 	};
 	
@@ -909,13 +1129,13 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		);
 	};
 	assistant._listenerForEnter = function(callback, event) {
-		dump("DUMPING EVENT");
-		dump(event);
-		dump(event.originalEvent);
-		dump("DUMPING CALLBACK");
-		dump(callback);
-		if (event && Mojo.Char.isEnterKey(event.originalEvent.keyCode)) {
-			dump("CALLING CALLBACK");
+		sch.debug("DUMPING EVENT");
+		sch.debug(event);
+		sch.debug(event.originalEvent);
+		sch.debug("DUMPING CALLBACK");
+		sch.debug(callback);
+		if (event && event.originalEvent && Mojo.Char.isEnterKey(event.originalEvent.keyCode)) {
+			sch.debug("CALLING CALLBACK");
 			callback.call(this);
 			return;
 		}
@@ -967,11 +1187,29 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 		if (window.name) {
 			var stagename = window.name;
 		} else {
-			var stagename = 'main';
+			var stagename = SPAZ_MAIN_STAGENAME;
 		}
 		return stagename;
 	};
 
+
+	/**
+	 *  
+	 */
+	assistant.isTopmostScene = function() {
+		// console.log(this.controller);
+		
+		
+		var topmost  = this.controller.stageController.topScene();
+
+		// console.log(topmost);
+		
+		var is_topmost = (topmost === this.controller);
+		
+		sch.error('is_topmost:'+is_topmost);
+		
+		return is_topmost;
+	};
 
 
 	assistant.openInBrowser = function(url) {
@@ -999,10 +1237,14 @@ scene_helpers.addCommonSceneMethods = function(assistant) {
 	};
 
 	assistant._setNotFullScreen = function(event) {
-		this.isFullScreen = false;//send notifications
+		// alert('_setNotFullScreen');
+		// alert('this.lastQuery:'+this.lastQuery);
+		this.isFullScreen = false; // send notifications
 	};
 	assistant._setFullScreen = function(event) {
-		this.isFullScreen = true; //dont send notifications
+		// alert('_setFullScreen');
+		// alert('this.lastQuery:'+this.lastQuery);
+		this.isFullScreen = true;  // dont send notifications
 		Spaz.closeDashboard();
 	};
 	
@@ -1080,14 +1322,14 @@ var LocationDialogAssistant = Class.create({
 	
 	activate: function() {
 		var thisA = this;
-		Mojo.Event.listen($('update-location-button'), Mojo.Event.tap, this.updateLocation.bind(this));
-		Mojo.Event.listen($('get-location-button'), Mojo.Event.tap, this.getLocation.bind(this));
+		Mojo.Event.listen(jQuery('#update-location-button')[0], Mojo.Event.tap, this.updateLocation.bind(this));
+		Mojo.Event.listen(jQuery('#get-location-button')[0], Mojo.Event.tap, this.getLocation.bind(this));
 	},
 	
 	deactivate: function() {
 		var thisA = this;
-		Mojo.Event.stopListening($('update-location-button'), Mojo.Event.tap, this.updateLocation.bind(this));
-		Mojo.Event.stopListening($('get-location-button'), Mojo.Event.tap, this.getLocation.bind(this));
+		Mojo.Event.stopListening(jQuery('#update-location-button')[0], Mojo.Event.tap, this.updateLocation.bind(this));
+		Mojo.Event.stopListening(jQuery('#get-location-button')[0], Mojo.Event.tap, this.getLocation.bind(this));
 	},
 	
 	getLocation: function() {

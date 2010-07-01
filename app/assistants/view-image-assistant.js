@@ -60,7 +60,7 @@ ViewImageAssistant.prototype.setup = function() {
 		}
 	);
 	this.controller.get('imageview').observe(Mojo.Event.imageViewChanged, this.changedImage.bind(this));    
-}
+};
 
 ViewImageAssistant.prototype.activate = function(event) {
 	
@@ -68,7 +68,7 @@ ViewImageAssistant.prototype.activate = function(event) {
 	// var height = jQuery('#imageview').parent().height();
 	var width  = window.innerWidth;
 	var height = window.innerHeight - parseInt(jQuery('#imageview').offset().top, 10) - 40;
-	sch.error(width+"x"+height);
+	sch.debug(width+"x"+height);
 
 
 	this.controller.get('imageview').mojo.manualSize(width, height);
@@ -77,18 +77,18 @@ ViewImageAssistant.prototype.activate = function(event) {
 	
 	/* put in event handlers here that should only be in effect when this scene is active. For
 	   example, key handlers that are observing the document */
-}
+};
 
 
 ViewImageAssistant.prototype.deactivate = function(event) {
 	/* remove any event handlers you added in activate and do any other cleanup that should happen before
 	   this scene is popped or another scene is pushed on top */
-}
+};
 
 ViewImageAssistant.prototype.cleanup = function(event) {
 	/* this function should do any cleanup needed before the scene is destroyed as 
 	   a result of being popped off the scene stack */
-}
+};
 
 
 ViewImageAssistant.prototype.onLeft = function() {
@@ -101,7 +101,7 @@ ViewImageAssistant.prototype.onRight = function() {
 
 ViewImageAssistant.prototype.changedImage = function(event) {
 	if (event.error) {
-		sch.error("Failed to load image!");
+		sch.debug("Failed to load image!");
 		sch.dump(event.error);
 	} else {
 		sch.dump("Loaded the image okay!", event.url);

@@ -32,19 +32,17 @@ MessageDetailAssistant.prototype.setup = function() {
 			viewMenuItems: [
 				{
 					items:[
-						{label: $L("Message Details"), command:'scroll-top', 'class':"palm-header left", width:320}				
+						{label: $L("Message Details"), command:'scroll-top', 'class':"palm-header left", width:320}		
 					]
 				}
 
 			],
 			cmdMenuItems:[
-				{
-					items: [
-						{label:$L('Compose'),  icon:'compose', command:'compose', shortcut:'N'},
-						{}
-					]
-				}
-
+				{label:$L('Compose'),  icon:'compose', command:'compose', shortcut:'N'}
+				// {},
+				// {label:$L('Reply'),  icon:'reply', command:'reply', shortcut:'R'},
+				// {label:$L('Forward'),  icon:'forward-email', command:'retweet', shortcut:'N'},
+				// {label:$L('Favorite'),  iconPath:'images/theme/menu-icon-favorite-outline.png', command:'compose', shortcut:'N'}
 			]
 		});
 		
@@ -113,7 +111,7 @@ MessageDetailAssistant.prototype.activate = function(event) {
 			sc.app.Tweets.get(this.status_id, this.isdm,
 				function(data) {
 					if (data !== null) {
-						sch.dump('Message '+data.status_id+' pulled from DB');
+						sch.error('Message '+thisA.status_id+' pulled from DB');
 						jQuery().trigger('get_one_status_succeeded', [data]);
 					} else { // if nothing is returned, get it from Twitter
 						sch.error('DM was not in sc.app.Tweets cache');
@@ -122,34 +120,43 @@ MessageDetailAssistant.prototype.activate = function(event) {
 					
 				},
 				function(message) {
-					sch.dump('Couldn\'t retrieve message from Depot:'+message);
+					sch.error('Couldn\'t retrieve message from Depot:'+message);
 					thisA.showAlert($L('There was an error retrieving the message data'));
 				}
 			);
 		}
 	} else {
-		if (this.status_obj){
-			jQuery().trigger('get_one_status_succeeded', [this.status_obj]);
-		} else {
-			sc.app.Tweets.get(this.status_id, this.isdm,
-				function(data) {
-					if (data !== null) {
-						sch.dump('Message '+data.status_id+' pulled from DB');
-						jQuery().trigger('get_one_status_succeeded', [data]);
-					} else { // if nothing is returned, get it from Twitter
-						sch.dump('Message '+this.status_id+' missing from DB; retrieving from Twitter');
-						thisA.twit.getOne(thisA.status_id);
-					}
-					
-				},
-				function(message) {
-					sch.dump('Couldn\'t retrieve message from Depot:'+message);
-					thisA.twit.getOne(thisA.status_id);
-				}
-			);
-			
-
-		}
+		sc.app.Tweets.get(
+			this.status_id,
+			this.isdm,
+			function(data) {
+				jQuery().trigger('get_one_status_succeeded', [data]);
+			},
+			function(message) {
+				thisA.showAlert($L('There was an error retrieving the message data'));
+			}
+		);
+		// if (this.status_obj){
+		// 			jQuery().trigger('get_one_status_succeeded', [this.status_obj]);
+		// 		} else {
+		// 			sc.app.Tweets.get(this.status_id, this.isdm,
+		// 				function(data) {
+		// 					if (data !== null) {
+		// 						sch.error('Message '+data.id+' pulled from DB');
+		// 						jQuery().trigger('get_one_status_succeeded', [data]);
+		// 					} else { // if nothing is returned, get it from Twitter
+		// 						sch.error('Message '+this.status_id+' missing from DB; retrieving from Twitter');
+		// 						thisA.twit.getOne(thisA.status_id);
+		// 					}	
+		// 				},
+		// 				function(message) {
+		// 					sch.error('Couldn\'t retrieve message from Depot:'+message);
+		// 					thisA.twit.getOne(thisA.status_id);
+		// 				}
+		// 			);
+		// 			
+		// 
+		// 		}
 	}
 	
 
@@ -161,7 +168,7 @@ MessageDetailAssistant.prototype.activate = function(event) {
 
 
 	jQuery('#message-detail-image', this.scroller).live(Mojo.Event.tap, function(e) {
-		var userid = jQuery(this).attr('data-screen_name');
+		var userid = jQuery(this).attr('data-user-id');
 		Mojo.Controller.stageController.pushScene('user-detail', userid);
 	});
 	
@@ -170,8 +177,20 @@ MessageDetailAssistant.prototype.activate = function(event) {
 		var in_reply_to = jQuery(this).attr('data-status-id');
 		thisA.prepReply(screen_name, in_reply_to, thisA.statusobj);
 	});
-	jQuery('#message-detail-action-retweet', this.scroller).live(Mojo.Event.tap, function(e) {
-		thisA.prepRetweet(thisA.statusobj);
+	// jQuery('#message-detail-action-retweet', this.scroller).live(Mojo.Event.tap, function(e) {
+	// 	thisA.prepRetweet(thisA.statusobj);
+	// });
+	jQuery('#message-detail-action-share', this.scroller).live(Mojo.Event.tap, function(e) {
+		thisA.controller.popupSubmenu({
+			onChoose:  thisA.sharePopupmenuChoose,
+			placeNear: e.target,
+			items: [
+				{label: 'ReTweet', command: 'retweet'},
+				{label: 'Quote', command:   'quote'},
+				{label: 'Email', command:   'email'},
+				{label: 'SMS/IM', command:  'sms'}
+			]
+		});
 	});
 	jQuery('#message-detail-action-dm', this.scroller).live(Mojo.Event.tap, function(e) {
 		thisA.prepDirectMessage(jQuery(this).attr('data-screen_name'));
@@ -188,9 +207,14 @@ MessageDetailAssistant.prototype.activate = function(event) {
 	});
 	
 	
+	jQuery('#message-detail-container .user', this.scroller).live(Mojo.Event.tap, function(e) {
+		var userid = jQuery(this).attr('data-user-id');
+		Mojo.Controller.stageController.pushScene('user-detail', userid);
+	});
+
 	jQuery('#message-detail-container .username.clickable', this.scroller).live(Mojo.Event.tap, function(e) {
 		var userid = jQuery(this).attr('data-user-screen_name');
-		Mojo.Controller.stageController.pushScene('user-detail', userid);
+		Mojo.Controller.stageController.pushScene('user-detail', '@'+userid);
 	});
 
 	jQuery('#message-detail-container .hashtag.clickable', this.scroller).live(Mojo.Event.tap, function(e) {
@@ -220,10 +244,12 @@ MessageDetailAssistant.prototype.deactivate = function(event) {
 	jQuery('#message-detail-container .in-reply-to-link', this.scroller).die(Mojo.Event.tap);
 	jQuery('#message-detail-image', this.scroller).die(Mojo.Event.tap);
 	jQuery('#message-detail-action-reply', this.scroller).die(Mojo.Event.tap);
-	jQuery('#message-detail-action-retweet', this.scroller).die(Mojo.Event.tap);
+	// jQuery('#message-detail-action-retweet', this.scroller).die(Mojo.Event.tap);
+	jQuery('#message-detail-action-share', this.scroller).die(Mojo.Event.tap);
 	jQuery('#message-detail-action-dm', this.scroller).die(Mojo.Event.tap);
 	jQuery('#message-detail-action-favorite', this.scroller).die(Mojo.Event.tap);
 	
+	jQuery('#message-detail-container .user', this.scroller).die(Mojo.Event.tap);
 	jQuery('#message-detail-container .username.clickable', this.scroller).die(Mojo.Event.tap);
 	jQuery('#message-detail-container .hashtag.clickable', this.scroller).die(Mojo.Event.tap);
 	jQuery('#message-detail-container div.timeline-entry>.status>.meta', this.scroller).die(Mojo.Event.tap);
@@ -240,7 +266,7 @@ MessageDetailAssistant.prototype.cleanup = function(event) {
 
 
 MessageDetailAssistant.prototype.processStatusReturn = function(e, statusobj) {
-	
+	var itemhtml;
 	
 	var sui = new SpazImageURL();
 	
@@ -258,15 +284,15 @@ MessageDetailAssistant.prototype.processStatusReturn = function(e, statusobj) {
 	/*
 		save this tweet to Depot
 	*/
-	sc.app.Tweets.save(statusobj);
+	// sc.app.Tweets.save(statusobj);
 	
 	/*
 		render tweet
 	*/
 	if (e.data.thisAssistant.isdm) {
-		var itemhtml = sc.app.tpl.parseTemplate('message-detail-dm', e.data.thisAssistant.statusobj);
+		itemhtml = sc.app.tpl.parseTemplate('message-detail-dm', e.data.thisAssistant.statusobj);
 	} else {
-		var itemhtml = sc.app.tpl.parseTemplate('message-detail', e.data.thisAssistant.statusobj);
+		itemhtml = sc.app.tpl.parseTemplate('message-detail', e.data.thisAssistant.statusobj);
 	}
 	
 	
@@ -274,4 +300,25 @@ MessageDetailAssistant.prototype.processStatusReturn = function(e, statusobj) {
 	
 	sch.updateRelativeTimes('#message-detail .status>.meta>.date>.date-relative', 'data-created_at');
 	
+};
+
+
+MessageDetailAssistant.prototype.sharePopupmenuChoose = function(cmd) {
+	
+	switch (cmd) {
+		case 'retweet':
+			this.prepRetweet(this.statusobj);
+			break;
+		case 'quote':
+			this.prepQuote(this.statusobj);
+			break;
+		case 'email':
+			this.emailTweet(this.statusobj);
+			break;
+		case 'sms':
+			this.SMSTweet(this.statusobj);
+			break;
+		default:
+			return;
+	}
 };

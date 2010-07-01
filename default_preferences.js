@@ -19,17 +19,30 @@ var default_preferences = {
 
     'network-autoadjustrefreshinterval': true,
 
+	'notify-newmessages':true,
+	'notify-mentions':true,
+	'notify-dms':true,
+	'notify-searchresults':true,
+	
+	'bgnotify-enabled':false,
+	'bgnotify-on-dm':true,
+	'bgnotify-on-mention':true,
+	'bgnotify-on-home':false,
+	'bgnotify-wakeoncheck':true,
+
     'timeline-scrollonupdate': true,
+
     'timeline-maxentries': 100,
-    'timeline-maxentries-dm': 10, 
-    'timeline-maxentries-reply': 10, 
+    'timeline-maxentries-dm': 50, 
+    'timeline-maxentries-reply': 50, 
+
     'timeline-friends-getcount': 20,
     'timeline-replies-getcount': 5,
     'timeline-dm-getcount': 5,
 
     'url-shortener': 'bitly',
 
-    'image-uploader': 'tweetphoto',
+    'image-uploader': 'yfrog',
 
     'services-twitpic-sharepassword': false,
 
@@ -38,10 +51,17 @@ var default_preferences = {
     'services-pingfm-sendreplies': false,
     'services-pingfm-updatetype': 'default',
 
+	'services-pikchur-apikey': 	'aJMHC7eHRbhnA7FLdXmAtA',
+	'services-pikchur-source': 	'NjMw',
+	'services-bitly-apikey': 	'R_f3b86681a63a6bbefc7d8949fd915f1d',
+
     'twitter-api-base-url': 'https://twitter.com/',
     'twitter-www-base-url': 'http://twitter.com/',
 
     'twitter-source': 'spaz',
 
 	'timeline-text-size': 'tall', // also grande, venti
-}
+	
+	'post-rt-cursor-position': 'beginning', // 'beginning' or 'end'
+	'post-send-on-enter': true
+};

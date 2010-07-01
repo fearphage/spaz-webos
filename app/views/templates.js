@@ -4,8 +4,6 @@
 
 sc.app.tpl = new SpazTemplate();
 
-console.log(sc.app.tpl);
-
 sc.app.tpl.addTemplateMethod('message-detail', function(d) {
 	var html = '', thumbHTML = '';
 
@@ -18,22 +16,29 @@ sc.app.tpl.addTemplateMethod('message-detail', function(d) {
 		thumbHTML += '</div>';
 	}
 	
-	html += '<div data-user-screen_name="'+d.user.screen_name+'" data-user-id="'+d.user.id+'" data-status-id="'+d.id+'">'
-	+ ' <div class="rounded-user-image" style="background-image:url('+d.user.profile_image_url+')" id="message-detail-image" data-screen_name="'+d.user.screen_name+'" title="View user\'s profile"></div>'
+	html += ''
+	+ '	<div class="user" data-user-screen_name="'+d.user.screen_name+'" data-user-id="'+d.user.id+'" data-status-id="'+d.id+'">'
+	+ '		<div class="user-image rounded-user-image" style="background-image:url('+d.user.profile_image_url+')" data-screen_name="'+d.user.screen_name+'" data-user-id="'+d.user.id+'" title="View user\'s profile"></div>'
+	+ '		<div class="screen_name" data-screen_name="'+d.user.screen_name+'">'
+	+ 			d.user.screen_name;
+	if (d.user["protected"]) {
+		html += '			<div class="protected-icon">&nbsp;</div>';
+	}
+	html += '	</div>';
+	if (d.user.name && d.user.name !== d.user.screen_name) {
+		html += '		<div class="real_name" data-screen_name="'+d.user.screen_name+'">'+d.user.name+'</div>';
+	}
+	html += '	</div>'
 	+ '	<div class="status">'
-	+ '		<div class="screen_name" data-screen_name="'+d.user.screen_name+'">'+d.user.screen_name+'</div>'
 	+ '		'+thumbHTML
 	+ '		<div class="text">'+d.text+'</div>'
 	+ '		<div class="meta" data-status-id="'+d.id+'">'
-	+ '			<div class="date"><strong>Posted</strong> <span class="date-relative" data-created_at="'+d.created_at+'">'+sch.getRelativeTime(d.created_at)+'</span> <strong>from</strong> <span class="source-link">'+d.source+'</span></div>';
+	+ '			<div class="date"><strong>Posted</strong> <span class="date-relative" data-created_at="'+d.created_at+'">'+sch.getRelativeTime(d.created_at)+'</span> from <span class="source-link">'+d.source+'</span></div>';
 	if (d.in_reply_to_status_id) {
 		html += '			<div class="in-reply-to"><strong>In-reply-to</strong>: <span class="in-reply-to-link clickable" data-irt-status-id="'+d.in_reply_to_status_id+'">@'+d.in_reply_to_screen_name+'</span></div>';
 	}
-	if (d.user.protected) {
-		html += '			<div class="protected-icon">Protected user</div>';
-	}
-	html += '		</div>';
-	html += '	</div>';
+	html += '		</div>'
+	+ '	</div>';
 	if (sc.app.username && sc.app.password) {
 		
 		html += '	<div id="message-detail-actions">'
@@ -43,11 +48,11 @@ sc.app.tpl.addTemplateMethod('message-detail', function(d) {
 		+ '				<div class="palm-row single">'
 		+ '					<button class="palm-button" id="message-detail-action-reply" data-status-id="'+d.id+'" data-screen_name="'+d.user.screen_name+'">@Reply to this message</button>'
 		+ '				</div>'
+		// + '				<div class="palm-row single">'
+		// + '					<button class="palm-button" id="message-detail-action-retweet" data-status-id="'+d.id+'">ReTweet this message</button>'
+		// + '				</div>'
 		+ '				<div class="palm-row single">'
-		+ '					<button class="palm-button" id="message-detail-action-retweet" data-status-id="'+d.id+'">ReTweet this message</button>'
-		+ '				</div>'
-		+ '   			<div class="palm-row single">'
-		+ '					<button class="palm-button" id="message-detail-action-dm" data-screen_name="'+d.user.screen_name+'">Direct message this user</button>'
+		+ '					<button class="palm-button" id="message-detail-action-share" data-status-id="'+d.id+'">Share this message</button>'
 		+ '				</div>';
 		if (d.favorited) {
 			html += '   			<div class="palm-row single">'
@@ -58,7 +63,10 @@ sc.app.tpl.addTemplateMethod('message-detail', function(d) {
 			+ '					<button class="palm-button" id="message-detail-action-favorite" data-status-id="'+d.id+'" data-screen_name="'+d.user.screen_name+'" data-favorited="false">Add as favorite</button>'
 			+ '				</div>';
 		}
-		html += '			</div>'
+		html += '   			<div class="palm-row single">'
+		+ '					<button class="palm-button" id="message-detail-action-dm" data-screen_name="'+d.user.screen_name+'">Direct message this user</button>'
+		+ '				</div>'
+		+ '			</div>'
 		+ '		</div>'
     + '	</div>';
 	}
@@ -70,10 +78,22 @@ sc.app.tpl.addTemplateMethod('message-detail', function(d) {
 sc.app.tpl.addTemplateMethod('message-detail-dm', function(d) {
 	var html = '';
 	
-	html += '<div data-user-screen_name="'+d.sender.screen_name+'" data-user-id="'+d.sender.id+'" data-status-id="'+d.id+'" data-isdm="true">'
-	+ ' <div class="rounded-user-image" style="background-image:url('+d.sender.profile_image_url+')" id="message-detail-image" data-screen_name="'+d.sender.screen_name+'" title="View user\'s profile"></div>'
-	+ '	<div class="status">'
-	+ '		<div class="screen_name" data-screen_name="'+d.sender.screen_name+'">'+d.sender.screen_name+'</div>'
+	
+	html += ''
+	+ '	<div class="user" data-user-screen_name="'+d.sender.screen_name+'" data-user-id="'+d.sender.id+'" data-status-id="'+d.id+'">'
+	+ '		<div class="user-image rounded-user-image" style="background-image:url('+d.sender.profile_image_url+')" data-screen_name="'+d.sender.screen_name+'" title="View user\'s profile"></div>'
+	+ '		<div class="screen_name" data-screen_name="'+d.sender.screen_name+'">'
+	+ 			d.sender.screen_name;
+	if (d.sender["protected"]) {
+		html += '			<div class="protected-icon">&nbsp;</div>';
+	}
+	html += '	</div>';
+	if (d.sender.name && d.sender.name !== d.sender.screen_name) {
+		html += '		<div class="real_name" data-screen_name="'+d.sender.screen_name+'">'+d.sender.name+'</div>';
+	}
+	html +='	</div>';
+	
+	html += '	<div class="status">'
 	+ '		<div class="text">'+d.text+'</div>'
 	+ '		<div class="meta" data-status-id="'+d.id+'">'
 	+ '			<div class="date"><strong>Direct message sent</strong> <span class="date-relative" data-created_at="'+d.created_at+'">'+sch.getRelativeTime(d.created_at)+'</span></div>'
@@ -115,30 +135,34 @@ sc.app.tpl.addTemplateMethod('message-detail-searchresult', function(d) {
 sc.app.tpl.addTemplateMethod('user-detail', function(d) {
 	var html = '';
 	
-	html += '	<div data-screen_name="'+d.screen_name+'" data-id="'+d.id+'">'
-	+ ' 	<div class="rounded-user-image" style="background-image:url('+d.profile_image_url+')" id="user-detail-image" data-screen_name="'+d.screen_name+'" title="View user\'s profile"></div>'
-	+ '		<div id="user-detail-info">'
-	+ '			<div id="user-detail-name" data-screen_name="'+d.screen_name+'">'
-	+ '			'+d.name;
-	if (d.name !== d.screen_name) {
-		html += '			('+d.screen_name+')';
-	}
-	html += '			</div>';
-	
-	html += '			<div id="user-detail-description">'+d.description+'</div>';
-
-	if (d.location) {
-		html += '		    <div><a id="user-detail-location" href="http://maps.google.com/?q=' +encodeURIComponent(d.location)+ '" title="View this location on a map">'+d.location+'</a></div>';
-	}
-	if (d.url) {
-		html += '			<div><a id="user-detail-homepage" href="'+d.url+'" title="Open user\'s homepage">Homepage</a></div>';
-	}
-	if (d.protected) {
-		html += '			<div class="protected-icon">Protected user</div>';
+	html += ''
+	+ '<div id="user-detail">'
+	+ '	<div class="user" data-user-screen_name="'+d.screen_name+'" data-user-id="'+d.id+'" data-status-id="'+d.id+'">'
+	+ '		<div class="user-image rounded-user-image" style="background-image:url('+d.profile_image_url+')" data-screen_name="'+d.screen_name+'" title="View user\'s profile"></div>'
+	+ '		<div class="screen_name" data-screen_name="'+d.screen_name+'">'
+	+ 			d.screen_name;
+	if (d["protected"]) {
+		html += '			<div class="protected-icon">&nbsp;</div>';
 	}
 	html += '		</div>';
+	if (d.name && d.name !== d.screen_name) {
+		html += '		<div class="real_name" data-screen_name="'+d.screen_name+'">'+d.name+'</div>';
+	}
+	html +='	</div>'
+	+ '	<div class="user-info">'
+	+ '		<div class="user-description">'+d.description+'</div>';
+	if (d.location) {
+		html += '   	 <div><a class="user-location" href="http://maps.google.com/?q=' +encodeURIComponent(d.location)+ '" title="View this location on a map">'+d.location+'</a></div>';
+	}
+	if (d.url) {
+		html += '		<div><a class="user-homepage" href="'+d.url+'" title="Open user\'s homepage">Homepage</a></div>';
+	}
+	// if (d.protected) {
+	// 	html += '		<div class="protected-icon">Protected user</div>';
+	// }
+	html += '	</div>';
 	
-	html += '<div>'
+	html += ''
 	+ '	<table class="palm-divider collapsible" id="user-timeline-trigger" x-mojo-tap-highlight="momentary">'
 	+ '		<tbody>'
 	+ '			<tr>'
@@ -166,7 +190,7 @@ sc.app.tpl.addTemplateMethod('user-detail', function(d) {
 	+ '					<div class="palm-group-title" id="search-toggle" x-mojo-loc="">Actions</div>'
 	+ '					<div class="palm-list">'
 	+ '						<div class="palm-row single">'
-	+ '							<button id="search-user"class="palm-button" data-screen_name="'+d.screen_name+'">Search for user</button>'
+	+ '							<button id="search-user" class="palm-button" data-screen_name="'+d.screen_name+'">Search for user</button>'
 	+ '						</div>';
 	if (sc.app.username && sc.app.password) {
 		html += '						<div class="palm-row single">'
@@ -203,21 +227,26 @@ sc.app.tpl.addTemplateMethod('user-detail', function(d) {
 sc.app.tpl.addTemplateMethod('tweet', function(d) {
 	var html = '';
 	
+	if (!d.user || !d.user.id) {
+		sch.error('Tweet did not contain a user object');
+		sch.error('Tweet object: '+sch.enJSON(d));
+	}
+	
 	html += '<div class="timeline-entry';
 	if (!d.not_new) {
 		html += ' new';
 	}
 	if (d.SC_is_reply) {
-		html += ' reply'
+		html += ' reply';
 	}
-	html += '" data-status-id="'+d.id+'" data-user-id="'+d.user.id+'" data-user-screen_name="'+d.user.screen_name+'" data-timestamp="'+d.created_at_unixtime+'">'
+	html += '" data-status-id="'+d.id+'" data-user-id="'+d.user.id+'" data-user-screen_name="'+d.user.screen_name+'" data-timestamp="'+d.SC_created_at_unixtime+'">'
 	+ '	<div class="user" data-user-id="'+d.user.id+'" data-user-screen_name="'+d.user.screen_name+'">'
 	+ '		<div class="user-img rounded-user-image" style="background-image:url('+d.user.profile_image_url+')"></div>'
 	+ '	</div>'
 	+ '	<div class="status">'
 	+ '		<div class="meta-wrapper">'
 	+ '			<div class="screen-name">'+d.user.screen_name;
-	if (d.user.protected) {
+	if (d.user["protected"]) {
 		html += '			<div class="protected-icon"></div>';
 	}
 	html += '			</div>'
@@ -239,7 +268,7 @@ sc.app.tpl.addTemplateMethod('dm', function(d) {
 	if (!d.from_cache) {
 		html += ' new';
 	}
-	html += '" data-isdm="true" data-status-id="'+d.id+'" data-user-id="'+d.sender.id+'" data-user-screen_name="'+d.sender.screen_name+'" data-timestamp="'+d.created_at_unixtime+'">'
+	html += '" data-isdm="true" data-status-id="'+d.id+'" data-user-id="'+d.sender.id+'" data-user-screen_name="'+d.sender.screen_name+'" data-timestamp="'+d.SC_created_at_unixtime+'">'
 	+ '	<div class="user" data-user-id="'+d.sender.id+'" data-user-screen_name="'+d.sender.screen_name+'">'
 	+ '		<div class="user-img rounded-user-image" style="background-image:url('+d.sender.profile_image_url+')"></div>'
 	+ '	</div>'
@@ -262,9 +291,9 @@ sc.app.tpl.addTemplateMethod('dm', function(d) {
 sc.app.tpl.addTemplateMethod('search-item', function(d) {
 	var html = '';
 
-	html += '<div class="timeline-entry" data-issearch="true" data-status-id="'+d.id+'" data-user-id="'+d.from_user_id+'" data-user-screen_name="'+d.from_user+'" data-timestamp="'+d.created_at_unixtime+'">'
-	+ '	<div class="user" data-user-id="'+d.from_user_id+'" data-user-screen_name="'+d.from_user+'">'
-	+ '		<img src="'+d.profile_image_url+'" title="'+d.from_user+'" />'
+	html += '<div class="timeline-entry" data-issearch="true" data-status-id="'+d.id+'" data-user-id="'+d.from_user_id+'" data-user-screen_name="'+d.from_user+'" data-timestamp="'+d.SC_created_at_unixtime+'">'
+	+ '	<div class="user" data-user-id="'+d.user.id+'" data-user-screen_name="'+d.user.screen_name+'">'
+	+ '		<div class="user-img rounded-user-image" style="background-image:url('+d.user.profile_image_url+')"></div>'
 	+ '	</div>'
 	+ '	<div class="status">'
 	+ '		<div class="meta-wrapper">'
@@ -299,7 +328,7 @@ sc.app.tpl.addTemplateMethod('error_info', function(d) {
 	
 	html += '<div class="error_info">';
 	
-	html += ' <div class="human_msg">'+d.human_msg+'</div>'
+	html += ' <div class="human_msg">'+d.human_msg+'</div>';
 	if (d.twitter_msg) {
 		html += ' <div class="row"><div class="label">'+$L('Twitter error')+'</div> <div class="value twitter_msg">'+d.twitter_msg+'</div></div>'
 		+ ' <div class="row"><div class="label">'+$L('Twitter request')+'</div> <div class="value twitter_request">'+d.twitter_request+'</div></div>';
@@ -325,7 +354,7 @@ sc.app.tpl.addTemplateMethod('error_info_text', function(d) {
 	* twitter_msg':	    		
 	*/
 	
-	dump(d);
+	sch.debug(d);
 	
 	var html = '';
 	
@@ -334,8 +363,10 @@ sc.app.tpl.addTemplateMethod('error_info_text', function(d) {
 		html += $L('Twitter error')+  ':'+d.twitter_msg+"\n"
 		+ $L('Twitter request')+':'+d.twitter_request+"\n";
 	}
+	// html += $L('Status code')+':'+d.status+"\n"
+	// + $L('Status text')+':'+d.statusText+"\n"
+	// + $L('URL')        +':'+d.url+"\n";
 	html += $L('Status code')+':'+d.status+"\n"
-	+ $L('Status text')+':'+d.statusText+"\n"
 	+ $L('URL')        +':'+d.url+"\n";
 	
 	return html;

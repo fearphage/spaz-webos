@@ -7,6 +7,8 @@ function PostAssistant(args) {
 		this.args = args;
 	}
 	
+	sch.error(this.args);
+	
 	this.returningFromFilePicker = false;
 	
 	scene_helpers.addCommonSceneMethods(this);
@@ -18,9 +20,11 @@ PostAssistant.prototype.setup = function() {
 	
 	this.initTwit();
 	
+	this.initAppMenu({ 'items':loggedin_appmenu_items });
+	
 	this.postMode = 'normal'; // 'normal' or 'email'
 	
-	this.postTextField = $('post-textfield');
+	this.postTextField = jQuery('#post-textfield')[0];
 	
 	this.Users = new Users(sc.app.prefs);
 	
@@ -59,7 +63,7 @@ PostAssistant.prototype.setup = function() {
 	this.controller.setupWidget('post-shorten-urls-button', this.buttonAttributes, this.shortenURLsButtonModel);
 	this.controller.setupWidget('post-textfield', {
 			'multiline':true,
-			'enterSubmits':true,
+			'enterSubmits':sc.app.prefs.get('post-send-on-enter'),
 			'autoFocus':true,
 			'changeOnKeyPress':true
 			
@@ -85,12 +89,24 @@ PostAssistant.prototype.setup = function() {
 			multiline:		false
 		},
 		this.imageUploaderEmailModel
-  );
+	);
 	
 	
-	
-	this.spm = new SpazPhotoMailer();
-	var uploaders = this.spm.getAPILabels();
+	/*
+		init photo emailer
+	*/
+	this.SPM = new SpazPhotoMailer();
+	var emailers = this.SPM.getAPILabels();
+	this.validImageEmailers = [];
+	for (var i=0; i < emailers.length; i++) {
+		this.validImageEmailers.push({label:$L(emailers[i]),  value:emailers[i]});
+	};
+
+	/*
+		init photo uploader
+	*/
+	this.SFU = new SpazFileUploader();
+	var uploaders = this.SFU.getAPILabels();
 	this.validImageUploaders = [];
 	for (var i=0; i < uploaders.length; i++) {
 		this.validImageUploaders.push({label:$L(uploaders[i]),  value:uploaders[i]});
@@ -115,22 +131,24 @@ PostAssistant.prototype.setup = function() {
 	
 	
 	
-	
+
 	
 	
 	/*
 		Bind listeners for UI stuff 
 	*/
-	Mojo.Event.listen($('post-send-button'), Mojo.Event.tap, this.sendPost.bindAsEventListener(this));
-	Mojo.Event.listen($('attach-image-button'), Mojo.Event.tap, this.attachImage.bindAsEventListener(this));
-	Mojo.Event.listen($('post-shorten-text-button'), Mojo.Event.tap, this.shortenText.bindAsEventListener(this));
-	Mojo.Event.listen($('post-shorten-urls-button'), Mojo.Event.tap, this.shortenURLs.bindAsEventListener(this));
+	Mojo.Event.listen(jQuery('#post-send-button')[0], Mojo.Event.tap, this.sendPost.bindAsEventListener(this));
+	Mojo.Event.listen(jQuery('#attach-image-button')[0], Mojo.Event.tap, this.attachImage.bindAsEventListener(this));
+	Mojo.Event.listen(jQuery('#post-shorten-text-button')[0], Mojo.Event.tap, this.shortenText.bindAsEventListener(this));
+	Mojo.Event.listen(jQuery('#post-shorten-urls-button')[0], Mojo.Event.tap, this.shortenURLs.bindAsEventListener(this));
 	this.listenForEnter('post-textfield', function() {
-		this.controller.get('post-send-button').mojo.activate();
-		this.sendPost();
+		if (sc.app.prefs.get('post-send-on-enter')) {
+			this.controller.get('post-send-button').mojo.activate();
+			this.sendPost();
+		}
 	});
-	Mojo.Event.listen($('image-uploader'), Mojo.Event.propertyChange, this.changeImageUploader.bindAsEventListener(this));	
-	Mojo.Event.listen($('image-uploader-email'), Mojo.Event.propertyChange, this.setImageUploaderEmail.bindAsEventListener(this));	
+	Mojo.Event.listen(jQuery('#image-uploader')[0], Mojo.Event.propertyChange, this.changeImageUploader.bindAsEventListener(this));	
+	Mojo.Event.listen(jQuery('#image-uploader-email')[0], Mojo.Event.propertyChange, this.setImageUploaderEmail.bindAsEventListener(this));	
 
 
 
@@ -148,8 +166,16 @@ PostAssistant.prototype.setup = function() {
 		e.data.thisAssistant.reportFailedPost(error_obj);
 	});
 
+
+	/*
+		Listen for file upload events
+	*/
+	Mojo.Event.listen(document, sc.events.fileUploadStart, thisA.onUploadStart.bindAsEventListener(thisA));
+	Mojo.Event.listen(document, sc.events.fileUploadSuccess, thisA.onUploadSuccess.bindAsEventListener(thisA));
+	Mojo.Event.listen(document, sc.events.fileUploadFailure, thisA.onUploadFailure.bindAsEventListener(thisA));
+
 	
-	Mojo.Event.listen($('post-textfield'), Mojo.Event.propertyChange, this._updateCharCount.bindAsEventListener(this));	
+	Mojo.Event.listen(jQuery('#post-textfield')[0], Mojo.Event.propertyChange, this._updateCharCount.bindAsEventListener(this));	
 	
 
 	jQuery('#post-panel-irt-dismiss').bind(Mojo.Event.tap, function(e) {
@@ -161,14 +187,46 @@ PostAssistant.prototype.setup = function() {
 };
 
 PostAssistant.prototype.activate = function(args) {
-	
+
 	var thisA = this;
+	
+	/*
+		Tweetphoto is no longer valid, so we need to change that
+	*/
+	if (this.imageUploaderModel['image-uploader'] == 'tweetphoto') {
+		this.imageUploaderModel['image-uploader'] = 'yfrog';
+		sc.app.prefs.set('image-uploader', 'yfrog');
+		this.showAlert(
+			$L('Tweetphoto is no longer supported by Spaz, so I\'ve changed your image hosting preference to yfrog. You can pick a different service under the App menu in Preferences.'),
+			$L('Change in image hosting service')
+		);
+	}
+	
 
 	if (this.args) {
 		
 		if (this.args.text) { this.postTextField.mojo.setText(this.args.text); }
 		
-		if (this.args.type) { /*type is ignored for now*/ }
+		if (this.args.type) {
+			/*
+				set cursor position
+			*/
+			switch(this.args.type) {
+				case 'quote':
+					this.postTextField.mojo.setCursorPosition(0,0);
+					break;
+					if (sc.app.prefs.get('post-rt-cursor-position') == 'beginning') {
+						this.postTextField.mojo.setCursorPosition(0,0);
+					}					
+				case 'rt':
+					if (sc.app.prefs.get('post-rt-cursor-position') == 'beginning') {
+						this.postTextField.mojo.setCursorPosition(0,0);
+					}
+					break;
+				default:
+					break;
+			}
+		}
 		
 		/*this.postTextField.mojo.setCursorPosition(this.args.select_start, this.args.select_start+this.args.select_length);*/
 		
@@ -188,6 +246,10 @@ PostAssistant.prototype.activate = function(args) {
 	
 
 	jQuery('#post-panel-username').text(sc.app.username);
+	
+
+	
+	
 	thisA._updateCharCount();
 
 
@@ -201,17 +263,20 @@ PostAssistant.prototype.deactivate = function(event) {
 };
 
 PostAssistant.prototype.cleanup = function(event) {
-	Mojo.Event.stopListening($('post-send-button'), Mojo.Event.tap, this.sendPost); 
-	Mojo.Event.stopListening($('attach-image-button'), Mojo.Event.tap, this.attachImage);
-	Mojo.Event.stopListening($('post-shorten-text-button'), Mojo.Event.tap, this.shortenText);
-	Mojo.Event.stopListening($('post-shorten-urls-button'), Mojo.Event.tap, this.shortenURLs);
-	Mojo.Event.stopListening($('image-uploader'), Mojo.Event.propertyChange, this.changeImageUploader);	
-	Mojo.Event.stopListening($('image-uploader-email'), Mojo.Event.propertyChange, this.setImageUploaderEmail);	
+	
+	var thisA = this;
+	
+	Mojo.Event.stopListening(jQuery('#post-send-button')[0], Mojo.Event.tap, this.sendPost); 
+	Mojo.Event.stopListening(jQuery('#attach-image-button')[0], Mojo.Event.tap, this.attachImage);
+	Mojo.Event.stopListening(jQuery('#post-shorten-text-button')[0], Mojo.Event.tap, this.shortenText);
+	Mojo.Event.stopListening(jQuery('#post-shorten-urls-button')[0], Mojo.Event.tap, this.shortenURLs);
+	Mojo.Event.stopListening(jQuery('#image-uploader')[0], Mojo.Event.propertyChange, this.changeImageUploader);	
+	Mojo.Event.stopListening(jQuery('#image-uploader-email')[0], Mojo.Event.propertyChange, this.setImageUploaderEmail);	
 	
 	
 	this.stopListeningForEnter('post-textfield');
 	
-	Mojo.Event.stopListening($('post-textfield'), Mojo.Event.propertyChange, this._updateCharCount.bindAsEventListener(this));	
+	Mojo.Event.stopListening(jQuery('#post-textfield')[0], Mojo.Event.propertyChange, this._updateCharCount.bindAsEventListener(this));	
 	
 	jQuery('#post-panel-irt-dismiss').unbind(Mojo.Event.tap);
 	jQuery('#post-image-lookup-email').unbind(Mojo.Event.tap);
@@ -219,6 +284,15 @@ PostAssistant.prototype.cleanup = function(event) {
 	
 	jQuery().unbind('update_succeeded');
 	jQuery().unbind('update_failed');
+	
+	/*
+		Listen for file upload events
+	*/
+	Mojo.Event.listen(document, sc.events.fileUploadStart, thisA.onUploadStart);
+	Mojo.Event.listen(document, sc.events.fileUploadSuccess, thisA.onUploadSuccess);
+	Mojo.Event.listen(document, sc.events.fileUploadFailure, thisA.onUploadFailure);
+
+	
 };
 
 
@@ -232,9 +306,9 @@ PostAssistant.prototype._updateCharCount = function() {
 
 	function _updateCharCountNow() {
 		var numchars  = thisA.postTextFieldModel.value.length;
-		var charcount = 140 - numchars;
-		document.getElementById('post-panel-counter-number').innerHTML = charcount.toString();
-		if (charcount < 0) {
+		var charleft = 140 - numchars;
+		document.getElementById('post-panel-counter-number').innerHTML = charleft.toString();
+		if (charleft < 0) {
 			jQuery('#post-panel-counter', thisA.controller.getSceneScroller()).addClass('over-limit');
 			/*
 				disable post send button
@@ -293,7 +367,7 @@ PostAssistant.prototype.shortenText = function(event) {
 
 PostAssistant.prototype.shortenURLs = function(event) {
 	
-	var event_target = $('post-shorten-urls-button');
+	var event_target = jQuery('#post-shorten-urls-button')[0];
 	
 	var surl = new SpazShortURL(SPAZCORE_SHORTURL_SERVICE_BITLY);
 	var longurls = sc.helpers.extractURLs(this.postTextFieldModel.value);
@@ -343,7 +417,7 @@ PostAssistant.prototype.shortenURLs = function(event) {
 			'version':'2.0.1',
 			'format':'json',
 			'login':'spazcore',
-			'apiKey':'R_f3b86681a63a6bbefc7d8949fd915f1d'
+			'apiKey':sc.app.prefs.get('services-bitly-apikey')
 		}
 	});
 	
@@ -375,7 +449,7 @@ PostAssistant.prototype.loadImageUploaderEmail = function(api_label) {
 	email = this.getImageUploaderEmail(api_label);
 	
 	if (!email) {
-		email = this.spm.apis[api_label].getToAddress({
+		email = this.SPM.apis[api_label].getToAddress({
 			'username':sc.app.username
 		});
 		this.setImageUploaderEmail(api_label, email);
@@ -414,6 +488,7 @@ PostAssistant.prototype.sendPost = function(event) {
 	var status = this.postTextFieldModel.value;
 	
 	if (this.postMode === 'email') {
+		
 		var api_label = this.imageUploaderModel['image-uploader'];
 		var email = this.imageUploaderEmailModel['image-uploader-email'];
 		var emailobj = {'name':api_label, 'address':email};
@@ -422,21 +497,55 @@ PostAssistant.prototype.sendPost = function(event) {
 		this.deactivateSpinner();
 		this.controller.stageController.popScene();
 		return;
-	}
-	
-	if (status.length > 0) {
-		var in_reply_to = parseInt(jQuery('#post-panel-irt-message', this.controller.getSceneScroller()).attr('data-status-id'), 10);
 		
-		if (in_reply_to > 0) {
-			this.twit.update(status, null, in_reply_to);
-		} else {
-			this.twit.update(status, null, null);
-		}
+	} else {
 
-		this.postTextFieldModel.disabled = true;
-		this.controller.modelChanged(this.postTextFieldModel);
-	} else { // don't post if length < 0
-		this.deactivateSpinner();
+		if (status.length > 0 && status.length <= 140) {
+			var in_reply_to = parseInt(jQuery('#post-panel-irt-message', this.controller.getSceneScroller()).attr('data-status-id'), 10);
+
+			if (this.model.attachment) { // we have an attachment; post through service
+
+				var source = 'spaz';
+
+				this.SFU.setAPI(this.imageUploaderModel['image-uploader']);
+
+				if (this.imageUploaderModel['image-uploader'] === 'pikchur') {
+					this.SFU.setAPIKey(sc.app.prefs.get('services-pikchur-apikey'));
+					source = sc.app.prefs.get('services-pikchur-source');
+				}
+
+				
+				this.SFU.uploadAndPost(this.model.attachment, {
+					'username' : sc.app.username,
+					'password' : sc.app.password,
+					'source'   : source,
+					'message'  : status,
+					'platform' : {
+						'sceneAssistant' : this
+					}
+				});
+				
+				
+				
+			} else { // normal post without attachment
+				
+				if (in_reply_to > 0) {
+					this.twit.update(status, null, in_reply_to);
+				} else {
+					this.twit.update(status, null, null);
+				}
+				
+			}
+
+			this.postTextFieldModel.disabled = true;
+			this.controller.modelChanged(this.postTextFieldModel);
+
+		} else { // don't post if length < 0 or > 140
+		
+			this.deactivateSpinner();
+			
+		}
+		
 	}
 	
 };
@@ -451,33 +560,41 @@ PostAssistant.prototype.attachImage = function() {
 	
 	var thisA = this;
 	
-	jQuery('#post-buttons-standard').slideUp('200', function() {
-		jQuery('#post-buttons-image').slideDown('200');
-	});
+	if (this.postMode === 'email') {
+		jQuery('#post-buttons-standard').slideUp('200', function() {
+			jQuery('#post-buttons-image').slideDown('200');
+		});
 
-	this.loadImageUploaderEmail();
-	
-	jQuery('#post-image-lookup-email').bind(Mojo.Event.tap, function(e) {
-		var api_label = thisA.imageUploaderModel['image-uploader'];
-		var help_text = $L(thisA.spm.apis[api_label].help_text);
-		var email_info_url = $L(thisA.spm.apis[api_label].email_info_url);
+		this.loadImageUploaderEmail();
 
-		thisA.showAlert(
-			$L(help_text),
-			$('Look-Up Posting Email Address'),
-			function(choice) {
-				if (choice === 'Open Browser') {
-					thisA.openInBrowser(email_info_url);
-				}
-			}, 
-			[{label:$L('Open')+' '+api_label, value:"Open Browser", type:'affirmative'}]
-		);
-	});
+		jQuery('#post-image-lookup-email').bind(Mojo.Event.tap, function(e) {
+			var api_label = thisA.imageUploaderModel['image-uploader'];
+			var help_text = $L(thisA.SPM.apis[api_label].help_text);
+			var email_info_url = $L(thisA.SPM.apis[api_label].email_info_url);
 
-	jQuery('#post-image-choose').bind(Mojo.Event.tap, function(e) {
+			thisA.showAlert(
+				$L(help_text),
+				jQuery('#Look-Up Posting Email Address')[0],
+				function(choice) {
+					if (choice === 'Open Browser') {
+						thisA.openInBrowser(email_info_url);
+					}
+				}, 
+				[{label:$L('Open')+' '+api_label, value:"Open Browser", type:'affirmative'}]
+			);
+		});
+
+		jQuery('#post-image-choose').bind(Mojo.Event.tap, function(e) {
+			thisA.chooseImage();
+		});
+		jQuery('#post-image-cancel').one('click', this.cancelAttachImage);
+
+
+	} else { // direct upload posting
+		
 		thisA.chooseImage();
-	});
-	jQuery('#post-image-cancel').one('click', this.cancelAttachImage);
+		
+	}
 
 	
 };
@@ -517,7 +634,17 @@ PostAssistant.prototype.postImageMessage = function(post_add_obj, message, file_
 	
 	file_obj = {'fullPath':file_path};
 	
-    Spaz.sendEmail({
+	Spaz.postToService({
+		fileName: file_path,
+		message: message,
+		controller: this.controller
+	});
+
+};
+
+
+PostAssistant.prototype.emailImageMessage = function(post_add_obj, message, file_path) {
+	Spaz.sendEmail({
       to: [post_add_obj],
       msg: message,
       subject: message,
@@ -525,7 +652,7 @@ PostAssistant.prototype.postImageMessage = function(post_add_obj, message, file_
       controller: this.controller
     });
     // next line should close new post "dialog"
-    //this.controller.stageController.popScene();
+    this.controller.stageController.popScene();
 };
 
 /**
@@ -564,7 +691,7 @@ PostAssistant.prototype.chooseImage = function(posting_address, message, filepat
 			
 			dump(thisA.model);
 			
-			thisA.postMode = 'email';
+			// thisA.postMode = 'email';
 			
 			thisA.returningFromFilePicker = true;
 			
@@ -576,14 +703,17 @@ PostAssistant.prototype.chooseImage = function(posting_address, message, filepat
 
 
 PostAssistant.prototype.onReturnFromFilePicker = function() {
+	sch.debug('returned from file picker');
+	
+	var thisA = this;
 	
 	this.cancelAttachImage();
 	jQuery('#post-panel-attachment').show();
 	jQuery('#post-panel-attachment-dismiss').one('click', function() {
-		this.postMode = 'normal';
+		// thisA.postMode = 'normal';
 		jQuery('#post-panel-attachment').hide();
-		this.model.attachment = null;
-		this.cancelAttachImage();
+		thisA.model.attachment = null;
+		thisA.cancelAttachImage();
 	});
 	
 };
@@ -668,3 +798,95 @@ PostAssistant.prototype.deactivateSpinner = function() {
 };
 
 
+/**
+ * fires when upload from this.SFU starts 
+ */
+PostAssistant.prototype.onUploadStart = function(e) {
+	Mojo.Log.info('fileUploadStart');
+	var data = sch.getEventData(e);
+	sch.debug(data);	
+};
+
+/**
+ * fires when upload from this.SFU is successful
+ */
+PostAssistant.prototype.onUploadSuccess = function(e) {
+	
+	Mojo.Log.info('fileUploadSuccess');
+	var returnobj = {};
+	var data = sch.getEventData(e);
+	sch.debug(data);
+	
+	/*
+		Parse the response if we are complete
+	*/
+	if (data.completed) {
+		var parser=new DOMParser();
+		
+		sch.error("returned from upload:");
+		sch.error(data.responseString);
+		
+		var xmldoc = parser.parseFromString(data.responseString,"text/xml");
+		var rspAttr = xmldoc.getElementsByTagName("rsp")[0].attributes;
+		
+		/*
+			Note that pikchur won't give us the statusid of the posted tweet
+			because they have to be difficult
+		*/
+		if (rspAttr.getNamedItem("stat") && rspAttr.getNamedItem("stat").nodeValue === 'ok') {
+			returnobj['mediaurl'] = jQuery(xmldoc).find('mediaurl').text();
+			returnobj['statusid'] = parseInt(jQuery(xmldoc).find('statusid').text(), 10);
+
+		/*
+			because Twitgoo has to be different
+		*/
+		} else if (rspAttr.getNamedItem("status") && rspAttr.getNamedItem("status").nodeValue === 'ok') {
+			returnobj['mediaurl'] = jQuery(xmldoc).find('mediaurl').text();
+			returnobj['statusid'] = parseInt(jQuery(xmldoc).find('statusid').text(), 10);
+			
+		} else {
+			returnobj['errAttributes'] = xmldoc.getElementsByTagName("err")[0].attributes;
+			returnobj['errMsg'] = errAttributes.getNamedItem("msg").nodeValue;
+		}
+		sch.debug(returnobj);
+		
+		if (returnobj.mediaurl) {
+			sch.debug("MEDIAURL");
+			var siu = new SpazImageURL();
+			var thumb = siu.getThumbForUrl(returnobj.mediaurl);
+			sch.debug('THUMB');
+			sch.debug(thumb);
+
+			// e.data.thisAssistant.renderSuccessfulPost(e, data);
+
+			// jQuery('#uploaded-img-link').attr('href', returnobj.mediaurl);
+			// jQuery('#posted-tweet').text(returnobj.statusid);
+			// jQuery('#uploaded-img-thumb').attr('src',  thumb);
+			// jQuery('#uploaded-img').show();
+
+		} else {
+			sch.debug("NO MEDIAURL");
+			jQuery('#uploaded-img').hide();
+		}
+		
+		this.deactivateSpinner();
+		this.controller.stageController.popScene({'refresh':true});
+	}
+	
+
+};
+
+
+/**
+ * fires when upload from this.SFU fails
+ */
+PostAssistant.prototype.onUploadFailure = function(e) {
+	// var data = sch.getEventData(e);
+	sch.error("File Upload Failure. Data:");
+	sch.error(e);
+	
+	this.deactivateSpinner();
+	this.postTextFieldModel.disabled = false;
+	this.controller.modelChanged(this.postTextFieldModel);
+	
+};

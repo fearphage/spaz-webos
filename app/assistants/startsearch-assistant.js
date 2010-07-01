@@ -7,11 +7,15 @@ function StartsearchAssistant() {
 }
 
 StartsearchAssistant.prototype.setup = function() {
-	var thisA = this;
 
 	this.scroller = this.controller.getSceneScroller();
 
+	/*
+		initialize the .twit object on the assistant
+	*/
+	this.initTwit();
 
+	var thisA = this;
 
 	if (sc.app.username && sc.app.password) {
 		this.setupCommonMenus({
@@ -84,33 +88,60 @@ StartsearchAssistant.prototype.setup = function() {
 		},
 		this.model
     );
-	
 	this.listenForEnter('search', function() {
 		this.handleSearch.call(this);
 	});
 	
-	this.postButtonAttributes = {
+	
+	/*
+		Setup reload trends button
+	*/
+	this.reloadTrendsButtonAttributes = {
 		type: Mojo.Widget.activityButton
 	};
-	this.postButtonModel = {
+	this.reloadTrendsButtonModel = {
 		buttonLabel : "Update Trends",
 		buttonClass: 'Primary'
 	};
-	
-	this.controller.setupWidget('reload-trends-button', this.postButtonAttributes, this.postButtonModel);
-	
-	
-	Mojo.Event.listen($('reload-trends-button'), Mojo.Event.tap, function() {
+	this.controller.setupWidget('reload-trends-button', this.reloadTrendsButtonAttributes, this.reloadTrendsButtonModel);
+	Mojo.Event.listen(jQuery('#reload-trends-button')[0], Mojo.Event.tap, function() {
 		thisA.refreshTrends();
 	});
+
+
+	/*
+		Setup reload saved searches button
+	*/
+	if (sc.app.username && sc.app.password) {
+		this.reloadSearchesButtonAttributes = {
+			type: Mojo.Widget.activityButton
+		};
+		this.reloadSearchesButtonModel = {
+			buttonLabel : "Update Saved Searches",
+			buttonClass: 'Primary'
+		};
+				
+		this.controller.setupWidget('reload-searches-button', this.reloadSearchesButtonAttributes, this.reloadSearchesButtonModel);
+		Mojo.Event.listen(jQuery('#reload-searches-button')[0], Mojo.Event.tap, function() {
+			thisA.refreshSearches();
+		});
+		jQuery('#saved-searches-container').show();
+	}
+
+
+
 	
-	Mojo.Event.listen($('search-button'), Mojo.Event.tap, this.handleSearch.bind(this));
+	/*
+		Setup search submit button
+	*/	
+	Mojo.Event.listen(jQuery('#search-button')[0], Mojo.Event.tap, this.handleSearch.bind(this));
+	
 	
 	/*
 		listen for trends data updates
 	*/
 	jQuery().bind('new_trends_data', {thisAssistant:this}, function(e, trends) {
-		thisA.deactivateSpinner();
+		thisA.deactivateTrendsSpinner();
 		
 		/*
 			some trends are wrapped in double-quotes, so we need to turn then into entities
@@ -126,7 +157,34 @@ StartsearchAssistant.prototype.setup = function() {
 		jQuery('#trends-list .trend-item').fadeIn(500);
 	});
 	
+	
+	/*
+		listen for saved searches data updates
+	*/
+	jQuery().bind('new_saved_searches_data', {thisAssistant:this}, function(e, searches) {
+		thisA.deactivateSavedSearchesSpinner();
+		
+		/*
+			some trends are wrapped in double-quotes, so we need to turn then into entities
+		*/
+		for (var k=0; k<searches.length; k++) {
+			console.log(searches[k]);
+			searches[k].query = searches[k].query.replace(/"/gi, '&quot;');
+		}
+		
+		var searcheshtml = Mojo.View.render({'collection':searches, template:'startsearch/savedsearch-item'});
+		
+		jQuery('#searches-list .search-item').remove();
+		jQuery('#searches-list').append(searcheshtml);
+		jQuery('#searches-list .search-item').fadeIn(500);
+	});
+	
+	
+	/*
+		initial load of trends and searches
+	*/
 	this.refreshTrends();
+	this.refreshSearches();
 	
 
 	
@@ -139,11 +197,14 @@ StartsearchAssistant.prototype.activate = function(event) {
 
 	var thisA = this;
 
-	jQuery('.trend-item').live(Mojo.Event.tap, function() {
+	/*
+		set-up taps on trends and search list items
+	*/
+	jQuery('.trend-item, .search-item').live(Mojo.Event.tap, function() {
 		var term = jQuery(this).attr('data-searchterm');
-		thisA.searchFor(term, 'lightweight');
+		var saved_id = parseInt(jQuery(this).attr('data-savedsearch-id'), 10);
+		thisA.searchFor(term, 'lightweight', saved_id);
 	});
-	
 	
 	
 	jQuery("#search-accordion").tabs("#search-accordion div.pane", { 
@@ -228,7 +289,7 @@ StartsearchAssistant.prototype.deactivate = function(event) {
 	/*
 		stop listening to trend-item taps
 	*/
-	jQuery('.trend-item').die(Mojo.Event.tap);
+	jQuery('.trend-item, .search-item').die(Mojo.Event.tap);
 	
 	/*
 		stop listening for timeline entry taps
@@ -248,17 +309,23 @@ StartsearchAssistant.prototype.cleanup = function(event) {
 	
 	this.stopListeningForEnter('search');
 	
-	Mojo.Event.stopListening($('reload-trends-button'), Mojo.Event.tap, function() {
+	Mojo.Event.stopListening(jQuery('#reload-trends-button')[0], Mojo.Event.tap, function() {
 		thisA.refreshTrends();
 	});
-	Mojo.Event.stopListening($('search-button'), Mojo.Event.tap, this.handleSearch);
+	Mojo.Event.stopListening(jQuery('#search-button')[0], Mojo.Event.tap, this.handleSearch);
 	jQuery().unbind('new_trends_data');
+	jQuery().unbind('new_saved_searches_data');
 };
 
 
 StartsearchAssistant.prototype.refreshTrends = function() {
 	// this.showInlineSpinner('#trends-spinner-container', 'Loading…');
 	sc.app.twit.getTrends();
+};
+
+StartsearchAssistant.prototype.refreshSearches = function() {
+	// this.showInlineSpinner('#trends-spinner-container', 'Loading…');
+	this.twit.getSavedSearches();
 };
 
 
@@ -274,15 +341,24 @@ StartsearchAssistant.prototype.propertyChanged = function(event) {
 };
 
 StartsearchAssistant.prototype.activateSpinner = function() {
-	this.buttonWidget = this.controller.get('reload-trends-button');
-	this.buttonWidget.mojo.activate();
+	var buttonWidget = jQuery('reload-trends-button').get(0);
+	buttonWidget.mojo.activate();
 };
 
-StartsearchAssistant.prototype.deactivateSpinner = function() {
+StartsearchAssistant.prototype.deactivateTrendsSpinner = function() {
 	dump("Deactivating spinner reload-trends-button");
-	this.buttonWidget = this.controller.get('reload-trends-button');
-	this.buttonWidget.mojo.deactivate();
+	var buttonWidget = jQuery('#reload-trends-button').get(0);
+	buttonWidget.mojo.deactivate();
 	dump("Deactivated spinner reload-trends-button");
+	
+};
+
+
+StartsearchAssistant.prototype.deactivateSavedSearchesSpinner = function() {
+	dump("Deactivating spinner reload-searches-button");
+	var buttonWidget = jQuery('#reload-searches-button').get(0);
+	buttonWidget.mojo.deactivate();
+	dump("Deactivated spinner reload-searches-button");
 	
 };
 
